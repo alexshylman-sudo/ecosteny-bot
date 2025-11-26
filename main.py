@@ -215,7 +215,7 @@ def build_main_menu_keyboard() -> InlineKeyboardMarkup:
 
 
 def build_back_row() -> list[list[InlineKeyboardButton]]:
-    return [[InlineKeyboardButton("⬅️ Назад в меню", callback_data="ui|back_main")]]
+    return [[InlineKeyboardButton("Назад в меню", callback_data="ui|back_main")]]
 
 
 def build_calc_category_keyboard() -> InlineKeyboardMarkup:
