@@ -1602,7 +1602,13 @@ def telegram_webhook():
 # ============================
 
 if __name__ == "__main__":
-    # для python-telegram-bot 20.x это синхронный метод, который сам поднимет event loop
-    print("Запуск бота в режиме polling...")
-    tg_application.run_polling()
+    port = int(os.getenv("PORT", "8443"))
+    webhook_url = os.getenv("WEBHOOK_URL")
+
+    tg_application.run_webhook(
+        listen="0.0.0.0",
+        port=port,
+        url_path=TG_BOT_TOKEN,
+        webhook_url=f"{webhook_url}/{TG_BOT_TOKEN}",
+    )
 
