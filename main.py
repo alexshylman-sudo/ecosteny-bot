@@ -1584,30 +1584,8 @@ def telegram_webhook():
 #   ЗАПУСК БОТА
 # ============================
 
-async def main():
-    # Инициализация
-    await tg_application.initialize()
-    await tg_application.start()
-
-    # Webhook для продакшена
-    env = os.getenv("ENV", "development")
-    if env == "production":
-        port = int(os.getenv("PORT", 8443))
-        webhook_url = os.getenv("WEBHOOK_URL")
-        if not webhook_url:
-            print("Предупреждение: WEBHOOK_URL не задан, webhook не настроен!")
-        else:
-            await tg_application.updater.start_webhook(
-                listen="0.0.0.0",
-                port=port,
-                url_path=TG_BOT_TOKEN,
-                webhook_url=f"{webhook_url}/{TG_BOT_TOKEN}"
-            )
-            print(f"Webhook запущен на порту {port}")
-    else:
-        # Polling для локалки
-        print("Запуск в режиме polling...")
-        await tg_application.run_polling()
-
 if __name__ == "__main__":
-    asyncio.run(main())
+    # для python-telegram-bot 20.x это синхронный метод, который сам поднимет event loop
+    print("Запуск бота в режиме polling...")
+    tg_application.run_polling()
+
