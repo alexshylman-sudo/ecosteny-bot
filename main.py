@@ -14,13 +14,14 @@ from telegram import (
     InlineKeyboardMarkup,
 )
 from telegram.ext import (
-    ApplicationBuilder,
+    Application,
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
     filters,
 )
+
 
 import sys
 from telegram import __version__ as TG_VER
@@ -212,7 +213,8 @@ CHAT_SYSTEM_PROMPT = """
 app = Flask(__name__)
 
 # Создаём приложение Telegram
-tg_application = ApplicationBuilder().token(TG_BOT_TOKEN).build()
+tg_application = Application.builder().token(TG_BOT_TOKEN).build()
+
 
 # ============================
 #   КЛАВИАТУРЫ
