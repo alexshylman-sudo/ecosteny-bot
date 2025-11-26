@@ -273,8 +273,8 @@ def build_height_keyboard(product_code: str, thickness: int) -> InlineKeyboardMa
 
 def build_add_more_materials_keyboard() -> InlineKeyboardMarkup:
     rows = [
-        [InlineKeyboardButton("➕ Добавить ещё материалы", callback_data="calc_more|yes")],
-        [InlineKeyboardButton("✅ Перейти к расчёту", callback_data="calc_more|no")],
+        [InlineKeyboardButton("Добавить ещё материалы", callback_data="calc_more|yes")],
+        [InlineKeyboardButton("Перейти к расчёту", callback_data="calc_more|no")],
     ]
     rows += build_back_row()
     return InlineKeyboardMarkup(rows)
@@ -354,11 +354,11 @@ def build_partner_role_keyboard() -> InlineKeyboardMarkup:
 
 def build_contacts_keyboard() -> InlineKeyboardMarkup:
     rows = [
-        [InlineKeyboardButton("🌐 Сайт ECO Стены", url="https://ecosteni.ru/")],
-        [InlineKeyboardButton("📲 Telegram-канал", url="https://t.me/ecosteni")],
-        [InlineKeyboardButton("📸 Instagram", url="https://www.instagram.com/schulmann_alex/")],
-        [InlineKeyboardButton("📌 Pinterest", url="https://ru.pinterest.com/3designservice/")],
-        [InlineKeyboardButton("▶️ YouTube", url="https://www.youtube.com/@GRAD_music_videos")],
+        [InlineKeyboardButton("Сайт ECO Стены", url="https://ecosteni.ru/")],
+        [InlineKeyboardButton("Telegram-канал", url="https://t.me/ecosteni")],
+        [InlineKeyboardButton("Instagram", url="https://www.instagram.com/schulmann_alex/")],
+        [InlineKeyboardButton("Pinterest", url="https://ru.pinterest.com/3designservice/")],
+        [InlineKeyboardButton("YouTube", url="https://www.youtube.com/@GRAD_music_videos")],
     ]
     rows += build_back_row()
     return InlineKeyboardMarkup(rows)
@@ -877,7 +877,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if mode == "info":
             await query.edit_message_text(
-                "ℹ️ Информация.\n\nВыберите раздел:",
+                "Информация.\n\nВыберите раздел:",
                 reply_markup=build_info_category_keyboard(),
             )
             return
