@@ -26,7 +26,7 @@ from telegram.ext import (
 #   НАСТРОЙКИ (через .env)
 # ============================
 
-TG_BOT_TOKEN = os.getenv("8067717578:AAHYK-7cHvupsxl_PrDW-bOsthiqKf8AkCI")
+TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN")
 if not TG_BOT_TOKEN:
     raise ValueError("Установите TG_BOT_TOKEN в .env!")
 
