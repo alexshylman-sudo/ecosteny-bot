@@ -30,8 +30,8 @@ TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN")
 if not TG_BOT_TOKEN:
     raise ValueError("Установите TG_BOT_TOKEN в .env!")
 
-OPENAI_API_KEY = os.getenv("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")  # Опционально
-ADMIN_CHAT_ID = int(os.getenv("203473623", "0"))
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+ADMIN_CHAT_ID = int(os.getenv("ADMIN_CHAT_ID", "0"))
 
 WELCOME_PHOTO_URL = "https://ecosteni.ru/wp-content/uploads/2025/11/qncccaze.jpg"
 WELCOME_GIF_URL = ""
