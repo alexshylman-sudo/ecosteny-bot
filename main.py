@@ -205,12 +205,12 @@ tg_application = ApplicationBuilder().token(TG_BOT_TOKEN).build()
 
 def build_main_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🧮 Рассчитать материалы", callback_data="main|calc")],
-        [InlineKeyboardButton(ℹ️ Информация", callback_data="main|info")],
-        [InlineKeyboardButton("📂 Получить каталоги", callback_data="main|catalogs")],
-        [InlineKeyboardButton("📑 Получить презентацию", callback_data="main|presentation")],
-        [InlineKeyboardButton("📇 Контактная информация", callback_data="main|contacts")],
-        [InlineKeyboardButton("🤝 Хочу стать партнёром", callback_data="main|partner")],
+        [InlineKeyboardButton("Рассчитать материалы", callback_data="main|calc")],
+        [InlineKeyboardButton("Информация", callback_data="main|info")],
+        [InlineKeyboardButton("Получить каталоги", callback_data="main|catalogs")],
+        [InlineKeyboardButton("Получить презентацию", callback_data="main|presentation")],
+        [InlineKeyboardButton("Контактная информация", callback_data="main|contacts")],
+        [InlineKeyboardButton("Хочу стать партнёром", callback_data="main|partner")],
     ])
 
 
