@@ -13,7 +13,10 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
-from telegram.ext import (
+from telegram.ext import 
+from telegram import __version__ as TG_VER
+print("### python-telegram-bot VERSION ON RENDER:", TG_VER)
+(
     ApplicationBuilder,
     CallbackQueryHandler,
     CommandHandler,
