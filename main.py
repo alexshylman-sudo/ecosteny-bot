@@ -1649,12 +1649,23 @@ if __name__ == "__main__":
     webhook_url = os.getenv("WEBHOOK_URL")
 
     if webhook_url:
+        print("Запуск webhook...")
+
+        # добавляем health-endpoint для Render и UptimeRobot
+        async def health(request):
+            return web.Response(text="OK", status=200)
+
+        from aiohttp import web
+
+        # создаём aiohttp-app
+        webhook_app = web.Application()
+        webhook_app.router.add_get("/", health)
+
+        # запускаем webhook на этом же aiohttp-app
         tg_application.run_webhook(
             listen="0.0.0.0",
             port=port,
             url_path=TG_BOT_TOKEN,
             webhook_url=f"{webhook_url}/{TG_BOT_TOKEN}",
+            web_app=webhook_app,   # ← ВАЖНО
         )
-    else:
-        tg_application.run_polling()
-
