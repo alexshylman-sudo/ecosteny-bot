@@ -251,6 +251,15 @@ def build_wall_product_keyboard() -> InlineKeyboardMarkup:
         buttons.append([InlineKeyboardButton(text=title, callback_data=f"product|{code}")])
     buttons += build_back_row()
     return InlineKeyboardMarkup(buttons)
+    
+
+def build_after_calc_keyboard() -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton("➕ Добавить материалы", callback_data="after_calc|add")],
+        [InlineKeyboardButton("📤 Отправить расчёт админу", callback_data="after_calc|send")],
+        [InlineKeyboardButton("🏠 Вернуться в меню", callback_data="after_calc|menu")],
+    ]
+    return InlineKeyboardMarkup(rows)
 
 
 def build_thickness_keyboard(product_code: str) -> InlineKeyboardMarkup:
@@ -815,13 +824,19 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     full_answer = warning + answer
 
+    # отправляем расчёт клиенту
     await update.effective_message.reply_text(full_answer, parse_mode="HTML")
+
+    # сохраняем результат для возможной отправки админу
+    context.chat_data["last_calc_result"] = full_answer
+
+    # предлагаем варианты действий
     await update.effective_message.reply_text(
-        "Если хотите сделать ещё один расчёт или задать другой вопрос — выберите вариант ниже:",
-        reply_markup=build_main_menu_keyboard(),
+        "Что сделать дальше? 👇",
+        reply_markup=build_after_calc_keyboard(),
     )
 
-    # Сброс состояния расчёта
+    # Сброс состояния расчёта (кроме last_calc_result)
     context.chat_data["main_mode"] = None
     context.chat_data["calc_phase"] = None
     context.chat_data["calc_items"] = []
@@ -833,6 +848,7 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["room_height"] = None
     context.chat_data["height_mode"] = None
     context.chat_data["await_custom_name_index"] = None
+
 
 # ============================
 #   CALLBACK HANDLER
@@ -848,26 +864,78 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     action = parts[0]
 
     # Назад в меню
-    if action == "ui" and len(parts) >= 2 and parts[1] == "back_main":
-        context.chat_data["main_mode"] = None
-        context.chat_data["calc_phase"] = None
-        context.chat_data["calc_items"] = []
-        context.chat_data["materials_locked"] = False
-        context.chat_data["width_questions_queue"] = []
-        context.chat_data["width_answers"] = {}
-        context.chat_data["current_width_cat"] = None
-        context.chat_data["await_room_height"] = False
-        context.chat_data["room_height"] = None
-        context.chat_data["height_mode"] = None
-        context.chat_data["await_custom_name_index"] = None
-        await query.edit_message_text("Чем могу помочь?", reply_markup=build_main_menu_keyboard())
-        return
+    # ДЕЙСТВИЯ ПОСЛЕ РАСЧЁТА
+    if action == "after_calc" and len(parts) >= 2:
+        sub = parts[1]
 
-    if not context.chat_data.get("started"):
-        await query.edit_message_text(
-            "Чтобы начать, отправьте /start."
-        )
-        return
+        # ➕ добавить материалы — по сути новый расчёт
+        if sub == "add":
+            context.chat_data["main_mode"] = "calc"
+            context.chat_data["calc_items"] = []
+            context.chat_data["calc_phase"] = "select_materials"
+            context.chat_data["materials_locked"] = False
+            context.chat_data["width_questions_queue"] = []
+            context.chat_data["width_answers"] = {}
+            context.chat_data["current_width_cat"] = None
+            context.chat_data["await_room_height"] = False
+            context.chat_data["room_height"] = None
+            context.chat_data["height_mode"] = None
+            context.chat_data["await_custom_name_index"] = None
+
+            await query.edit_message_text(
+                "Давайте добавим материалы.\n\nВыберите категорию:",
+                reply_markup=build_calc_category_keyboard(),
+            )
+            return
+
+        # 📤 отправить расчёт админу
+        if sub == "send":
+            result = context.chat_data.get("last_calc_result")
+            if not ADMIN_CHAT_ID:
+                await query.answer("Админ не настроен.", show_alert=True)
+                return
+            if not result:
+                await query.answer("Нет сохранённого расчёта для отправки.", show_alert=True)
+                return
+
+            user = query.from_user
+            username = f"@{user.username}" if user.username else "ник не указан"
+            full_name = user.full_name or ""
+            client_info_lines = [
+                f"Ник в Telegram: {username}",
+            ]
+            if full_name:
+                client_info_lines.append(f"Имя в профиле: {full_name}")
+            client_info_lines.append(f"ID пользователя: {user.id}")
+            client_info = "\n".join(client_info_lines)
+
+            text = (
+                "Новый расчёт от бота-калькулятора ECO Стены:\n\n"
+                f"{result}\n\n"
+                f"{client_info}"
+            )
+
+            try:
+                await tg_application.bot.send_message(
+                    chat_id=ADMIN_CHAT_ID,
+                    text=text,
+                    parse_mode="HTML",
+                )
+                await query.answer("Расчёт отправлен админу ✅", show_alert=True)
+            except Exception as e:
+                print("ERROR sending calc to admin:", repr(e))
+                await query.answer("Не удалось отправить расчёт админу 😔", show_alert=True)
+            return
+
+        # 🏠 вернуться в главное меню
+        if sub == "menu":
+            context.chat_data["main_mode"] = None
+            await query.edit_message_text(
+                "Чем могу помочь? 👇",
+                reply_markup=build_main_menu_keyboard(),
+            )
+            return
+
 
     main_mode = context.chat_data.get("main_mode")
     materials_locked = context.chat_data.get("materials_locked", False)
@@ -1345,12 +1413,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     main_mode = context.chat_data.get("main_mode")
     calc_phase = context.chat_data.get("calc_phase")
 
-    # 0. Название/артикул для последнего материала (ТОЛЬКО на этапе выбора материалов)
+    # 0. Название/артикул для последнего материала
+    # Работает:
+    #  – на этапе выбора материалов (select_materials)
+    #  – после ввода высоты помещения (height_mode), перед выбором режима по высоте
     custom_index = context.chat_data.get("await_custom_name_index")
     if (
         custom_index is not None
         and main_mode == "calc"
-        and calc_phase == "select_materials"
+        and calc_phase in {"select_materials", "height_mode"}
     ):
         items = context.chat_data.get("calc_items", [])
         if 0 <= custom_index < len(items):
@@ -1360,24 +1431,41 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 f"Зафиксировал название/артикул: <b>{user_text.strip()}</b>.\n"
                 "Я буду показывать это название в итоговом расчёте, чтобы не перепутать варианты.\n"
-                "Теперь можете добавить ещё материалы или перейти к расчёту.",
+                "Теперь можете добавить ещё материалы или перейти к расчёту "
+                "(или выбрать режим расчёта по высоте, если уже указали размеры).",
                 parse_mode="HTML",
             )
             return
 
+
     # 1. Вопросы по ширине/высоте на этапе расчёта
-    if main_mode == "calc" and calc_phase in {"widths", "height"}:
-        # Вопрос про высоту помещения
         if calc_phase == "height" and context.chat_data.get("await_room_height"):
+            # сохраняем высоту помещения
             context.chat_data["room_height"] = user_text.strip()
             context.chat_data["await_room_height"] = False
             context.chat_data["calc_phase"] = "height_mode"
+
+            # даём возможность указать название/артикул после выбора ширины и высоты стен
+            items = context.chat_data.get("calc_items", [])
+            name_hint = ""
+            if items:
+                # будем ждать название для последнего добавленного материала
+                context.chat_data["await_custom_name_index"] = len(items) - 1
+                name_hint = (
+                    "Высоту зафиксировал.\n\n"
+                    "Если хотите, можете сейчас указать название или артикул для последнего выбранного материала "
+                    "(например, конкретная коллекция или текстура). Просто отправьте текст следующим сообщением.\n\n"
+                )
+            else:
+                name_hint = "Высоту зафиксировал.\n\n"
+
             await update.message.reply_text(
-                "Высоту зафиксировал.\n\n"
-                "Теперь выберите, как считать по высоте:",
+                name_hint
+                + "Теперь выберите, как считать по высоте:",
                 reply_markup=build_height_mode_keyboard(),
             )
             return
+
 
         # Вопросы про ширину материалов
         current_cat = context.chat_data.get("current_width_cat")
