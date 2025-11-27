@@ -1601,14 +1601,18 @@ def telegram_webhook():
 #   ЗАПУСК БОТА
 # ============================
 
+# Запуск для Render и локально
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", "8443"))
-    webhook_url = os.getenv("WEBHOOK_URL")
-
-    tg_application.run_webhook(
-        listen="0.0.0.0",
-        port=port,
-        url_path=TG_BOT_TOKEN,
-        webhook_url=f"{webhook_url}/{TG_BOT_TOKEN}",
-    )
+    import uvicorn
+    # Для локального теста
+    port = int(os.environ.get("PORT", 10000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, workers=1)
+else:
+    # Когда Render запускает через gunicorn или uvicorn
+    port = int(os.environ.get("PORT", 10000))
+    import threading
+    threading.Thread(target=asyncio.run, args=(main(),), daemon=True).start()
+    # Открываем порт для Render
+    from waitress import serve
+    serve(app, host="0.0.0.0", port=port)
 
