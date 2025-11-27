@@ -29,14 +29,6 @@ from telegram import __version__ as TG_VER
 print("### PYTHON VERSION ON RENDER:", sys.version)
 print("### python-telegram-bot VERSION ON RENDER:", TG_VER)
 
-(
-    Application,
-    CallbackQueryHandler,
-    CommandHandler,
-    ContextTypes,
-    MessageHandler,
-    filters,
-)
 
 # ============================
 #   НАСТРОЙКИ (через .env)
