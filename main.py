@@ -1373,11 +1373,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
-        await query.edit_message_text("По этой категории пока нет подробного описания.")
-        await query.message.reply_text("Чем могу помочь дальше?", reply_markup=build_main_menu_keyboard())
-        context.chat_data["main_mode"] = None
-        return
-
     # PARTNER ROLE
     if action == "partner_role" and len(parts) >= 2:
         role = parts[1]
