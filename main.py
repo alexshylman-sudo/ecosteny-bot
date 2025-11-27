@@ -1643,29 +1643,37 @@ def telegram_webhook():
 #   ЗАПУСК БОТА
 # ============================
 
-# Запуск для Render и локально
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "8443"))
     webhook_url = os.getenv("WEBHOOK_URL")
 
+    # Если задан WEBHOOK_URL (прод на Render) — работаем через webhook
     if webhook_url:
-        print("Запуск webhook...")
+        print(f"Запускаю webhook-сервер на порту {port}...")
+        print(f"Webhook URL: {webhook_url}/{TG_BOT_TOKEN}")
 
-        # добавляем health-endpoint для Render и UptimeRobot
-        async def health(request):
-            return web.Response(text="OK", status=200)
-
+        # Импортируем aiohttp только здесь, чтобы не тянуть его наверх
         from aiohttp import web
 
-        # создаём aiohttp-app
+        # Health-check endpoint для Render и UptimeRobot
+        async def health(request: web.Request) -> web.Response:
+            return web.Response(text="OK", status=200)
+
+        # Создаём aiohttp-приложение и вешаем на него health-роут
         webhook_app = web.Application()
         webhook_app.router.add_get("/", health)
 
-        # запускаем webhook на этом же aiohttp-app
+        # Запускаем webhook-сервер python-telegram-bot на том же aiohttp-приложении
         tg_application.run_webhook(
             listen="0.0.0.0",
             port=port,
             url_path=TG_BOT_TOKEN,
             webhook_url=f"{webhook_url}/{TG_BOT_TOKEN}",
-            web_app=webhook_app,   # ← ВАЖНО
+            web_app=webhook_app,  # важный параметр: используем наше aiohttp-приложение
         )
+
+    # Если WEBHOOK_URL не задан (локальный запуск) — просто polling
+    else:
+        print("WEBHOOK_URL не задан. Запускаю бота в режиме polling (локальный режим)...")
+        tg_application.run_polling()
+
