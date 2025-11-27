@@ -666,19 +666,19 @@ async def handle_partner_text(update: Update, context: ContextTypes.DEFAULT_TYPE
 # ============================
 
     async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not OPENAI_API_KEY:
-        await update.effective_message.reply_text(
-            "Сейчас расчёт через модель недоступен (нет ключа OpenAI). "
-            "Попросите менеджера сделать расчёт вручную."
-        )
-        return
+        if not OPENAI_API_KEY:
+            await update.effective_message.reply_text(
+                "Сейчас расчёт через модель недоступен (нет ключа OpenAI). "
+                "Попросите менеджера сделать расчёт вручную."
+            )
+            return
 
-    items = context.chat_data.get("calc_items", [])
-    if not items:
-        await update.effective_message.reply_text(
-            "Не вижу выбранных материалов. Попробуйте заново через «Рассчитать материалы»."
-        )
-        return
+        items = context.chat_data.get("calc_items", [])
+        if not items:
+            await update.effective_message.reply_text(
+                "Не вижу выбранных материалов. Попробуйте заново через «Рассчитать материалы»."
+            )
+            return
 
     catalog_json = json.dumps(WALL_PRODUCTS, ensure_ascii=False)
     selection_block = get_calc_selection_block(context)
