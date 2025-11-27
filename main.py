@@ -665,7 +665,7 @@ async def handle_partner_text(update: Update, context: ContextTypes.DEFAULT_TYPE
 #   РАСЧЁТ ПО ТЕКСТУ (OpenAI)
 # ============================
 
-async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not OPENAI_API_KEY:
         await update.effective_message.reply_text(
             "Сейчас расчёт через модель недоступен (нет ключа OpenAI). "
