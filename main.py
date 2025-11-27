@@ -1357,13 +1357,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             items[custom_index]["custom_name"] = user_text.strip()
             context.chat_data["calc_items"] = items
             context.chat_data["await_custom_name_index"] = None
-await update.message.reply_text(
-    f"Зафиксировал название/артикул: <b>{user_text.strip()}</b>.\n"
-    "Я буду показывать это название в итоговом расчёте, чтобы не перепутать варианты.\n"
-    "Теперь можете добавить ещё материалы или перейти к расчёту.",
-    parse_mode="HTML",
-)
-
+            await update.message.reply_text(
+                f"Зафиксировал название/артикул: <b>{user_text.strip()}</b>.\n"
+                "Я буду показывать это название в итоговом расчёте, чтобы не перепутать варианты.\n"
+                "Теперь можете добавить ещё материалы или перейти к расчёту.",
+                parse_mode="HTML",
+            )
             return
 
     # 1. Вопросы по ширине/высоте на этапе расчёта
