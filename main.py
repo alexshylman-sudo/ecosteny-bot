@@ -1414,9 +1414,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     calc_phase = context.chat_data.get("calc_phase")
 
     # 0. Название/артикул для последнего материала
-    # Работает:
-    #  – на этапе выбора материалов (select_materials)
-    #  – после ввода высоты помещения (height_mode), перед выбором режима по высоте
     custom_index = context.chat_data.get("await_custom_name_index")
     if (
         custom_index is not None
@@ -1437,8 +1434,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-
     # 1. Вопросы по ширине/высоте на этапе расчёта
+    if main_mode == "calc" and calc_phase in {"widths", "height"}:
+        # Вопрос про высоту помещения
         if calc_phase == "height" and context.chat_data.get("await_room_height"):
             # сохраняем высоту помещения
             context.chat_data["room_height"] = user_text.strip()
@@ -1449,7 +1447,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             items = context.chat_data.get("calc_items", [])
             name_hint = ""
             if items:
-                # будем ждать название для последнего добавленного материала
                 context.chat_data["await_custom_name_index"] = len(items) - 1
                 name_hint = (
                     "Высоту зафиксировал.\n\n"
@@ -1466,11 +1463,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-
         # Вопросы про ширину материалов
         current_cat = context.chat_data.get("current_width_cat")
         queue = context.chat_data.get("width_questions_queue") or []
         if calc_phase == "widths" and current_cat:
+            ...
+            # остальной код ширины без изменений
+
             wa = context.chat_data.get("width_answers", {})
             wa[current_cat] = user_text.strip()
             context.chat_data["width_answers"] = wa
