@@ -1456,18 +1456,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
 
+    # 1. Вопросы по ширине/высоте на этапе расчёта
+    if main_mode == "calc" and calc_phase in {"widths", "height"}:
+
         # Вопрос про высоту помещения
         if calc_phase == "height" and context.chat_data.get("await_room_height"):
-            # сохраняем высоту помещения
             context.chat_data["room_height"] = user_text.strip()
             context.chat_data["await_room_height"] = False
 
             items = context.chat_data.get("calc_items", [])
             if items:
-                # ждём название/артикул для последнего материала
                 context.chat_data["await_custom_name_index"] = len(items) - 1
 
-            # переходим в фазу ожидания названия/артикула после размеров
             context.chat_data["calc_phase"] = "await_custom_name_after_size"
 
             text = (
@@ -1476,20 +1476,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "(например, конкретная коллекция или текстура). Просто отправьте текст следующим сообщением.\n\n"
                 "Если не знаете название — нажмите кнопку ниже."
             )
+
             await update.message.reply_text(
                 text,
-                reply_markup=build_skip_name_keyboard(),  # Только одна кнопка "Я не знаю → ДАЛЬШЕ"
+                reply_markup=build_skip_name_keyboard(),
             )
             return
-
 
         # Вопросы про ширину материалов
         current_cat = context.chat_data.get("current_width_cat")
         queue = context.chat_data.get("width_questions_queue") or []
-        if calc_phase == "widths" and current_cat:
-            ...
-            # остальной код ширины без изменений
 
+        if calc_phase == "widths" and current_cat:
             wa = context.chat_data.get("width_answers", {})
             wa[current_cat] = user_text.strip()
             context.chat_data["width_answers"] = wa
@@ -1501,6 +1499,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if queue:
                 next_cat = queue[0]
                 context.chat_data["current_width_cat"] = next_cat
+
                 if next_cat == "walls":
                     qtext = (
                         "Спасибо! Теперь:\n\n"
@@ -1519,10 +1518,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "❓ Сколько по ширине стены займут 3D панели?\n"
                         "Например: 2 м, 1800 мм и т.п."
                     )
+
                 await update.message.reply_text(qtext)
                 return
+
             else:
-                # Все ширины получены — спрашиваем высоту помещения
                 context.chat_data["current_width_cat"] = None
                 context.chat_data["calc_phase"] = "height"
                 context.chat_data["await_room_height"] = True
@@ -1532,7 +1532,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-        # fallback на случай рассинхрона
+        # fallback
         await update.message.reply_text(
             "Кажется, мы немного запутались с расчётом. Давайте начнём расчёт заново через /menu."
         )
@@ -1548,6 +1548,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.chat_data["height_mode"] = None
         context.chat_data["await_custom_name_index"] = None
         return
+
 
     # Партнёрка
     if main_mode == "partner":
