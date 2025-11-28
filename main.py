@@ -741,13 +741,13 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
         custom = it.get("custom_name")
         if cat == "walls":
             base_title = PRODUCT_CODES.get(it["product_code"], it["product_code"])
-            title = base_title
             line = (
-                f"Стеновые панели: {title}, толщина {it['thickness']} мм, высота листа {it['height']} мм."
+                f"Стеновые панели: {base_title}, толщина {it['thickness']} мм, высота листа {it['height']} мм."
             )
             if custom:
                 line += f" Название/артикул клиента: «{custom}»."
             items_descriptions.append(line)
+
         elif cat == "slats":
             base = it.get("base_type")
             base_title = "WPC реечная панель" if base == "wpc" else "Деревянная панель"
@@ -755,6 +755,7 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if custom:
                 line += f" Название/артикул клиента: «{custom}»."
             items_descriptions.append(line)
+
         elif cat == "3d":
             vcode = it.get("variant_code")
             size = "600×1200 мм" if vcode == "var1" else "1200×3000 мм"
@@ -763,9 +764,11 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if custom:
                 line += f" Название/артикул клиента: «{custom}»."
             items_descriptions.append(line)
+
         else:
             if custom:
                 items_descriptions.append(f"Материал: {custom}.")
+
 
 
 
@@ -788,7 +791,7 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "НЕ упоминай её и НЕ считай вообще.\n"
         "1) Для КАЖДОЙ выбранной категории материалов рассчитать примерное количество панелей и ориентировочную стоимость.\n"
         "2) Обязательно выводи категории отдельно, как отдельные блоки (с разделителем и заголовком, как описано в формате ответа).\n"
-        "3) Если для материала указан «Название/артикул клиента», ОБЯЗАТЕЛЬНО явно используй его в расчёте: "
+        "3) Если для материала указано «Название/артикул клиента», ОБЯЗАТЕЛЬНО явно используй его в расчёте: "
         "добавь в описание выбранного материала и продублируй в итоговом выводе по этой категории (например, в строке «Выбранный материал»).\n"
         "4) Учитывай выбранный режим по высоте (по высоте материала ИЛИ по высоте помещения).\n"
         "5) ОБЯЗАТЕЛЬНО для каждой категории покажи ОТХОДЫ: сколько панели идёт в подрезку/резерв и какой процент отходов.\n"
@@ -798,6 +801,7 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "6) Если каких-то данных не хватает — сделай разумные допущения и явно их озвучь.\n"
         "7) Ответ дай структурно и понятно для клиента, без таблиц — только текст, списки и эмодзи.\n"
     )
+
 
 
 
