@@ -867,7 +867,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if action == "after_calc" and len(parts) >= 2:
         sub = parts[1]
 
-        # ➕ добавить материалы — по сути новый расчёт
+        # ➕ Добавить материалы
         if sub == "add":
             context.chat_data["main_mode"] = "calc"
             context.chat_data["calc_items"] = []
@@ -887,7 +887,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        # 📤 отправить расчёт админу
+        # 📤 Отправить расчёт админу
         if sub == "send":
             result = context.chat_data.get("last_calc_result")
             if not ADMIN_CHAT_ID:
@@ -900,11 +900,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user = query.from_user
             username = f"@{user.username}" if user.username else "ник не указан"
             full_name = user.full_name or ""
-            client_info_lines = [f"Ник в Telegram: {username}"]
-            if full_name:
-                client_info_lines.append(f"Имя в профиле: {full_name}")
-            client_info_lines.append(f"ID пользователя: {user.id}")
-            client_info = "\n".join(client_info_lines)
+
+            client_info = (
+                f"Ник в Telegram: {username}\n"
+                + (f"Имя в профиле: {full_name}\n" if full_name else "")
+                + f"ID пользователя: {user.id}"
+            )
 
             text = (
                 "Новый расчёт от бота-калькулятора ECO Стены:\n\n"
@@ -924,7 +925,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.answer("Не удалось отправить расчёт админу 😔", show_alert=True)
             return
 
-        # 🏠 вернуться в главное меню
+        # 🏠 Вернуться в меню
         if sub == "menu":
             context.chat_data["main_mode"] = None
             await query.edit_message_text(
@@ -936,6 +937,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ПРОПУСТИТЬ ВВОД НАЗВАНИЯ ПОСЛЕ РАЗМЕРОВ
     if action == "after_name" and len(parts) >= 2:
         sub = parts[1]
+
         if sub == "skip":
             context.chat_data["await_custom_name_index"] = None
             context.chat_data["calc_phase"] = "height_mode"
@@ -945,6 +947,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=build_height_mode_keyboard(),
             )
             return
+
 
 
 
@@ -1500,34 +1503,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-
-
-    # 1. Вопросы по ширине/высоте на этапе расчёта
-    if main_mode == "calc" and calc_phase in {"widths", "height"}:
-
-        # Вопрос про высоту помещения
-        if calc_phase == "height" and context.chat_data.get("await_room_height"):
-            context.chat_data["room_height"] = user_text.strip()
-            context.chat_data["await_room_height"] = False
-
-            items = context.chat_data.get("calc_items", [])
-            if items:
-                context.chat_data["await_custom_name_index"] = len(items) - 1
-
-            context.chat_data["calc_phase"] = "await_custom_name_after_size"
-
-            text = (
-                "Высоту зафиксировал.\n\n"
-                "Если хотите, можете сейчас указать название или артикул для последнего выбранного материала "
-                "(например, конкретная коллекция или текстура). Просто отправьте текст следующим сообщением.\n\n"
-                "Если не знаете название — нажмите кнопку ниже."
-            )
-
-            await update.message.reply_text(
-                text,
-                reply_markup=build_skip_name_keyboard(),
-            )
-            return
 
     # 1. Вопросы по ширине/высоте на этапе расчёта
     if main_mode == "calc" and calc_phase in {"widths", "height"}:
