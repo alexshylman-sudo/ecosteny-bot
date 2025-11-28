@@ -1138,27 +1138,35 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # РЕЕЧНЫЕ: выбор типа
     if action == "slats_type" and len(parts) >= 2:
         base_type = parts[1]
+
         if base_type == "wpc":
             context.chat_data["slats_base_type"] = "wpc"
             await query.edit_message_text(
                 "Тип: WPC реечная панель.\n\nВыберите вариант:",
                 reply_markup=build_wpc_slats_name_keyboard(),
             )
-elif base_type == "wood":
-    context.chat_data["slats_base_type"] = "wood"
-    items = context.chat_data.get("calc_items", [])
-    items.append({"category": "slats", "base_type": "wood"})
-    context.chat_data["calc_items"] = items
-    await query.edit_message_text(
-        "Реечные панели — Деревянная панель добавлена в расчёт.\n\n"
-        f"Ориентировочная цена: {SLAT_PRICES['wood']} ₽ за панель.\n\n"
-        "После ввода размеров я подскажу, можно ли указать название/артикул для этого материала.",
-        reply_markup=build_add_more_materials_keyboard(),
-    )
+            return
+
+        elif base_type == "wood":
+            context.chat_data["slats_base_type"] = "wood"
+            items = context.chat_data.get("calc_items", [])
+            items.append({"category": "slats", "base_type": "wood"})
+            context.chat_data["calc_items"] = items
+
+            await query.edit_message_text(
+                "Реечные панели — Деревянная панель добавлена в расчёт.\n\n"
+                f"Ориентировочная цена: {SLAT_PRICES['wood']} ₽ за панель.\n\n"
+                "После ввода размеров я предложу указать название/артикул (если он важен).",
+                reply_markup=build_add_more_materials_keyboard(),
+            )
+            return
 
         else:
-            await query.edit_message_text("Не удалось определить тип реечной панели. Попробуйте ещё раз.")
-        return
+            await query.edit_message_text(
+                "Не удалось определить тип реечной панели. Попробуйте ещё раз."
+            )
+            return
+
 
     # РЕЕЧНЫЕ WPC: выбор варианта
     if action == "slats_wpc_name" and len(parts) >= 2:
