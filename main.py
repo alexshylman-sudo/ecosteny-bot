@@ -1626,9 +1626,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.chat_data["await_custom_name_index"] = None
         return
 
-
-
-
     # Партнёрка
     if main_mode == "partner":
         await handle_partner_text(update, context)
@@ -1675,6 +1672,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Если хотите начать заново — нажмите /menu, и я покажу главное меню."
     )
+
 
 # ============================
 #   ОБРАБОТКА ФОТО
