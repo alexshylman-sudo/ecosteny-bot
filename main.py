@@ -1487,66 +1487,75 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     calc_phase = context.chat_data.get("calc_phase")
 
     # 0. Название/артикул для последнего материала
+    # Спрашиваем ТОЛЬКО после того, как клиент ввёл ширину и высоту стены
     custom_index = context.chat_data.get("await_custom_name_index")
-    if custom_index is not None and main_mode == "calc":
+    if (
+        custom_index is not None
+        and main_mode == "calc"
+        and calc_phase == "await_custom_name_after_size"
+    ):
         items = context.chat_data.get("calc_items", [])
         if 0 <= custom_index < len(items):
             items[custom_index]["custom_name"] = user_text.strip()
             context.chat_data["calc_items"] = items
             context.chat_data["await_custom_name_index"] = None
 
-            # Имя/артикул во время выбора материалов
-            if calc_phase == "select_materials":
-                await update.message.reply_text(
-                    f"Зафиксировал название/артикул: <b>{user_text.strip()}</b>.\n"
-                    "Теперь можете добавить ещё материалы или перейти к расчёту.",
-                    parse_mode="HTML",
-                )
-                return
-
-            # Имя/артикул после ввода ширины и высоты стены
-            if calc_phase == "await_custom_name_after_size":
-                await update.message.reply_text(
-                    f"Зафиксировал название/артикул: <b>{user_text.strip()}</b>.\n"
-                    "Теперь выберите, как считать по высоте:",
-                    parse_mode="HTML",
-                )
-                context.chat_data["calc_phase"] = "height_mode"
-                await update.message.reply_text(
-                    "Как считать по высоте?",
-                    reply_markup=build_height_mode_keyboard(),
-                )
-                return
+            await update.message.reply_text(
+                f"Зафиксировал название/артикул: <b>{user_text.strip()}</b>.\n"
+                "Теперь выберите, как считать по высоте:",
+                parse_mode="HTML",
+            )
+            context.chat_data["calc_phase"] = "height_mode"
+            await update.message.reply_text(
+                "Как считать по высоте?",
+                reply_markup=build_height_mode_keyboard(),
+            )
+            return
 
 
-    # 1. Вопросы по ширине/высоте на этапе расчёта
-    if main_mode == "calc" and calc_phase in {"widths", "height"}:
 
-        # Вопрос про высоту помещения
         if calc_phase == "height" and context.chat_data.get("await_room_height"):
             # сохраняем высоту помещения
             context.chat_data["room_height"] = user_text.strip()
             context.chat_data["await_room_height"] = False
 
             items = context.chat_data.get("calc_items", [])
+            ask_name = False
             if items:
-                # ждём название/артикул для последнего материала
-                context.chat_data["await_custom_name_index"] = len(items) - 1
+                last_index = len(items) - 1
+                last_item = items[last_index]
+                # Спрашиваем название ТОЛЬКО если его ещё не было
+                if not last_item.get("custom_name"):
+                    context.chat_data["await_custom_name_index"] = last_index
+                    ask_name = True
 
-            # переходим в фазу ожидания названия/артикула после размеров
-            context.chat_data["calc_phase"] = "await_custom_name_after_size"
+            if ask_name:
+                # переходим в фазу ожидания названия/артикула после размеров
+                context.chat_data["calc_phase"] = "await_custom_name_after_size"
 
-            text = (
-                "Высоту зафиксировал.\n\n"
-                "Если хотите, можете сейчас указать название или артикул для последнего выбранного материала "
-                "(например, конкретная коллекция или текстура). Просто отправьте текст следующим сообщением.\n\n"
-                "Если не знаете название — нажмите кнопку ниже."
-            )
-            await update.message.reply_text(
-                text,
-                reply_markup=build_skip_name_keyboard(),  # Только одна кнопка "Я не знаю → ДАЛЬШЕ"
-            )
-            return
+                text = (
+                    "Высоту зафиксировал.\n\n"
+                    "Если хотите, можете сейчас указать название или артикул для последнего выбранного материала "
+                    "(например, конкретная коллекция или текстура). Просто отправьте текст следующим сообщением.\n\n"
+                    "Если не знаете название — нажмите кнопку ниже."
+                )
+                await update.message.reply_text(
+                    text,
+                    reply_markup=build_skip_name_keyboard(),
+                )
+                return
+            else:
+                # Название уже есть — сразу переходим к выбору режима по высоте
+                context.chat_data["calc_phase"] = "height_mode"
+                await update.message.reply_text(
+                    "Высоту зафиксировал.\n\nТеперь выберите, как считать по высоте:",
+                )
+                await update.message.reply_text(
+                    "Как считать по высоте?",
+                    reply_markup=build_height_mode_keyboard(),
+                )
+                return
+
 
         # Вопросы про ширину материалов
         current_cat = context.chat_data.get("current_width_cat")
