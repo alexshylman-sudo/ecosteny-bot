@@ -1144,19 +1144,18 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Тип: WPC реечная панель.\n\nВыберите вариант:",
                 reply_markup=build_wpc_slats_name_keyboard(),
             )
-        elif base_type == "wood":
-            context.chat_data["slats_base_type"] = "wood"
-            items = context.chat_data.get("calc_items", [])
-            items.append({"category": "slats", "base_type": "wood"})
-            context.chat_data["calc_items"] = items
-            context.chat_data["await_custom_name_index"] = len(items) - 1
-            await query.edit_message_text(
-                "Реечные панели — Деревянная панель добавлена в расчёт.\n\n"
-                f"Ориентировочная цена: {SLAT_PRICES['wood']} ₽ за панель.\n\n"
-                "Если вы знаете точное название или артикул этой позиции — напишите его следующим сообщением.\n"
-                "После этого можете добавить ещё материалы или перейти к расчёту.",
-                reply_markup=build_add_more_materials_keyboard(),
-            )
+elif base_type == "wood":
+    context.chat_data["slats_base_type"] = "wood"
+    items = context.chat_data.get("calc_items", [])
+    items.append({"category": "slats", "base_type": "wood"})
+    context.chat_data["calc_items"] = items
+    await query.edit_message_text(
+        "Реечные панели — Деревянная панель добавлена в расчёт.\n\n"
+        f"Ориентировочная цена: {SLAT_PRICES['wood']} ₽ за панель.\n\n"
+        "После ввода размеров я подскажу, можно ли указать название/артикул для этого материала.",
+        reply_markup=build_add_more_materials_keyboard(),
+    )
+
         else:
             await query.edit_message_text("Не удалось определить тип реечной панели. Попробуйте ещё раз.")
         return
@@ -1166,17 +1165,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         name_code = parts[1]
         name_map = {"name1": "Название 1", "name2": "Название 2", "name3": "Название 3"}
         name_human = name_map.get(name_code, "Название 1")
-        items = context.chat_data.get("calc_items", [])
-        items.append({"category": "slats", "base_type": "wpc", "name_code": name_code, "name_human": name_human})
-        context.chat_data["calc_items"] = items
-        context.chat_data["await_custom_name_index"] = len(items) - 1
-        await query.edit_message_text(
-            f"Реечные панели — WPC, {name_human} добавлены в расчёт.\n\n"
-            f"Ориентировочная цена: {SLAT_PRICES['wpc']} ₽ за панель.\n\n"
-            "Если вы знаете точное название или артикул этой позиции — напишите его следующим сообщением.\n"
-            "После этого можете добавить ещё материалы или перейти к расчёту.",
-            reply_markup=build_add_more_materials_keyboard(),
-        )
+items = context.chat_data.get("calc_items", [])
+items.append({"category": "slats", "base_type": "wpc", "name_code": name_code, "name_human": name_human})
+context.chat_data["calc_items"] = items
+await query.edit_message_text(
+    f"Реечные панели — WPC, {name_human} добавлены в расчёт.\n\n"
+    f"Ориентировочная цена: {SLAT_PRICES['wpc']} ₽ за панель.\n\n"
+    "После ввода размеров я предложу указать название/артикул, если это нужно.",
+    reply_markup=build_add_more_materials_keyboard(),
+)
+
         return
 
     # 3D панели: выбор варианта
@@ -1185,19 +1183,18 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if vcode not in PANELS_3D:
             await query.edit_message_text("Такого варианта 3D панели нет. Попробуйте ещё раз.")
             return
-        items = context.chat_data.get("calc_items", [])
-        items.append({"category": "3d", "variant_code": vcode})
-        context.chat_data["calc_items"] = items
-        context.chat_data["await_custom_name_index"] = len(items) - 1
-        label = "600 × 1200 мм" if vcode == "var1" else "1200 × 3000 мм"
-        price = PANELS_3D[vcode]["price_rub"]
-        await query.edit_message_text(
-            f"3D панели ({label}) добавлены в расчёт.\n\n"
-            f"Ориентировочная цена: {price} ₽ за панель.\n\n"
-            "Если у вас есть конкретное название коллекции или артикул — напишите его следующим сообщением.\n"
-            "После этого можете добавить ещё материалы или перейти к расчёту.",
-            reply_markup=build_add_more_materials_keyboard(),
-        )
+items = context.chat_data.get("calc_items", [])
+items.append({"category": "3d", "variant_code": vcode})
+context.chat_data["calc_items"] = items
+label = "600 × 1200 мм" if vcode == "var1" else "1200 × 3000 мм"
+price = PANELS_3D[vcode]["price_rub"]
+await query.edit_message_text(
+    f"3D панели ({label}) добавлены в расчёт.\n\n"
+    f"Ориентировочная цена: {price} ₽ за панель.\n\n"
+    "После ввода размеров я предложу указать название/артикул (если он важен для вас).",
+    reply_markup=build_add_more_materials_keyboard(),
+)
+
         return
 
     # Стеновые панели: выбор типа
@@ -1266,16 +1263,15 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ):
             await query.edit_message_text("Такой панели нет в каталоге. Попробуйте ещё раз.")
             return
-        items = context.chat_data.get("calc_items", [])
-        items.append({"category": "walls", "product_code": product_code, "thickness": thickness, "height": height})
-        context.chat_data["calc_items"] = items
-        context.chat_data["await_custom_name_index"] = len(items) - 1
-        await query.edit_message_text(
-            "Стеновые панели добавлены в расчёт.\n\n"
-            "Если вы знаете точное название/артикул этой панели (коллекция, текстура) — напишите его следующим сообщением.\n"
-            "После этого можете добавить ещё материалы или перейти к расчёту.",
-            reply_markup=build_add_more_materials_keyboard(),
-        )
+items = context.chat_data.get("calc_items", [])
+items.append({"category": "walls", "product_code": product_code, "thickness": thickness, "height": height})
+context.chat_data["calc_items"] = items
+await query.edit_message_text(
+    "Стеновые панели добавлены в расчёт.\n\n"
+    "После ввода ширины и высоты стен я предложу указать название/артикул (если он нужен).",
+    reply_markup=build_add_more_materials_keyboard(),
+)
+
         return
 
     # ДОБАВИТЬ ЕЩЁ / ПЕРЕЙТИ К РАСЧЁТУ
