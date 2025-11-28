@@ -966,6 +966,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 
+
         # 📤 отправить расчёт админу
         if sub == "send":
             result = context.chat_data.get("last_calc_result")
@@ -1512,8 +1513,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
+    # 1. Вопросы по ширине/высоте на этапе расчёта
+    if main_mode == "calc" and calc_phase in {"widths", "height"}:
 
-
+        # Вопрос про высоту помещения
         if calc_phase == "height" and context.chat_data.get("await_room_height"):
             # сохраняем высоту помещения
             context.chat_data["room_height"] = user_text.strip()
@@ -1541,7 +1544,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 await update.message.reply_text(
                     text,
-                    reply_markup=build_skip_name_keyboard(),
+                    reply_markup=build_skip_name_keyboard(),  # Только одна кнопка "Я не знаю → ДАЛЬШЕ"
                 )
                 return
             else:
@@ -1555,7 +1558,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=build_height_mode_keyboard(),
                 )
                 return
-
 
         # Вопросы про ширину материалов
         current_cat = context.chat_data.get("current_width_cat")
@@ -1619,6 +1621,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.chat_data["height_mode"] = None
         context.chat_data["await_custom_name_index"] = None
         return
+
 
 
 
