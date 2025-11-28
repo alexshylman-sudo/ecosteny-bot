@@ -887,12 +887,56 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-    
-       # ПРОПУСТИТЬ ВВОД НАЗВАНИЯ ПОСЛЕ РАЗМЕРОВ
+        # 📤 отправить расчёт админу
+        if sub == "send":
+            result = context.chat_data.get("last_calc_result")
+            if not ADMIN_CHAT_ID:
+                await query.answer("Админ не настроен.", show_alert=True)
+                return
+            if not result:
+                await query.answer("Нет сохранённого расчёта для отправки.", show_alert=True)
+                return
+
+            user = query.from_user
+            username = f"@{user.username}" if user.username else "ник не указан"
+            full_name = user.full_name or ""
+            client_info_lines = [f"Ник в Telegram: {username}"]
+            if full_name:
+                client_info_lines.append(f"Имя в профиле: {full_name}")
+            client_info_lines.append(f"ID пользователя: {user.id}")
+            client_info = "\n".join(client_info_lines)
+
+            text = (
+                "Новый расчёт от бота-калькулятора ECO Стены:\n\n"
+                f"{result}\n\n"
+                f"{client_info}"
+            )
+
+            try:
+                await tg_application.bot.send_message(
+                    chat_id=ADMIN_CHAT_ID,
+                    text=text,
+                    parse_mode="HTML",
+                )
+                await query.answer("Расчёт отправлен админу ✅", show_alert=True)
+            except Exception as e:
+                print("ERROR sending calc to admin:", repr(e))
+                await query.answer("Не удалось отправить расчёт админу 😔", show_alert=True)
+            return
+
+        # 🏠 вернуться в главное меню
+        if sub == "menu":
+            context.chat_data["main_mode"] = None
+            await query.edit_message_text(
+                "Чем могу помочь? 👇",
+                reply_markup=build_main_menu_keyboard(),
+            )
+            return
+
+    # ПРОПУСТИТЬ ВВОД НАЗВАНИЯ ПОСЛЕ РАЗМЕРОВ
     if action == "after_name" and len(parts) >= 2:
         sub = parts[1]
         if sub == "skip":
-            # не ждём больше названия/артикула
             context.chat_data["await_custom_name_index"] = None
             context.chat_data["calc_phase"] = "height_mode"
 
@@ -901,6 +945,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=build_height_mode_keyboard(),
             )
             return
+
 
 
         # 📤 отправить расчёт админу
@@ -1456,6 +1501,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
 
+
     # 1. Вопросы по ширине/высоте на этапе расчёта
     if main_mode == "calc" and calc_phase in {"widths", "height"}:
 
@@ -1483,10 +1529,38 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
+    # 1. Вопросы по ширине/высоте на этапе расчёта
+    if main_mode == "calc" and calc_phase in {"widths", "height"}:
+
+        # Вопрос про высоту помещения
+        if calc_phase == "height" and context.chat_data.get("await_room_height"):
+            # сохраняем высоту помещения
+            context.chat_data["room_height"] = user_text.strip()
+            context.chat_data["await_room_height"] = False
+
+            items = context.chat_data.get("calc_items", [])
+            if items:
+                # ждём название/артикул для последнего материала
+                context.chat_data["await_custom_name_index"] = len(items) - 1
+
+            # переходим в фазу ожидания названия/артикула после размеров
+            context.chat_data["calc_phase"] = "await_custom_name_after_size"
+
+            text = (
+                "Высоту зафиксировал.\n\n"
+                "Если хотите, можете сейчас указать название или артикул для последнего выбранного материала "
+                "(например, конкретная коллекция или текстура). Просто отправьте текст следующим сообщением.\n\n"
+                "Если не знаете название — нажмите кнопку ниже."
+            )
+            await update.message.reply_text(
+                text,
+                reply_markup=build_skip_name_keyboard(),  # Только одна кнопка "Я не знаю → ДАЛЬШЕ"
+            )
+            return
+
         # Вопросы про ширину материалов
         current_cat = context.chat_data.get("current_width_cat")
         queue = context.chat_data.get("width_questions_queue") or []
-
         if calc_phase == "widths" and current_cat:
             wa = context.chat_data.get("width_answers", {})
             wa[current_cat] = user_text.strip()
@@ -1499,7 +1573,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if queue:
                 next_cat = queue[0]
                 context.chat_data["current_width_cat"] = next_cat
-
                 if next_cat == "walls":
                     qtext = (
                         "Спасибо! Теперь:\n\n"
@@ -1518,11 +1591,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "❓ Сколько по ширине стены займут 3D панели?\n"
                         "Например: 2 м, 1800 мм и т.п."
                     )
-
                 await update.message.reply_text(qtext)
                 return
-
             else:
+                # Все ширины получены — спрашиваем высоту помещения
                 context.chat_data["current_width_cat"] = None
                 context.chat_data["calc_phase"] = "height"
                 context.chat_data["await_room_height"] = True
@@ -1532,7 +1604,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-        # fallback
+        # fallback на случай рассинхрона
         await update.message.reply_text(
             "Кажется, мы немного запутались с расчётом. Давайте начнём расчёт заново через /menu."
         )
@@ -1548,6 +1620,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.chat_data["height_mode"] = None
         context.chat_data["await_custom_name_index"] = None
         return
+
 
 
     # Партнёрка
