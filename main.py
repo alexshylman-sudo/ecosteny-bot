@@ -1183,7 +1183,7 @@ await query.edit_message_text(
     reply_markup=build_add_more_materials_keyboard(),
 )
 
-        return
+    return
 
     # 3D панели: выбор варианта
     if action == "3d_variant" and len(parts) >= 2:
