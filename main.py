@@ -1108,64 +1108,65 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # РАСЧЁТ: выбор категории
-    if action == "calc_cat" and len(parts) >= 2:
-        cat = parts[1]
-        context.chat_data["selected_category"] = cat
-        context.chat_data["calc_phase"] = "select_materials"
+# РАСЧЁТ: выбор категории
+if action == "calc_cat" and len(parts) >= 2:
+    cat = parts[1]
+    context.chat_data["selected_category"] = cat
+    context.chat_data["calc_phase"] = "select_materials"
 
-        if cat == "walls":
-            await query.edit_message_text(
-                "Категория: Стеновые панели.\n\nШаг 1. Выберите тип панели:",
-                reply_markup=build_wall_product_keyboard(),
-            )
-        elif cat == "slats":
-            await query.edit_message_text(
-                "Категория: Реечные панели.\n\nВыберите тип:",
-                reply_markup=build_slats_category_keyboard(),
-            )
-        elif cat == "3d":
-            await query.edit_message_text(
-                "Категория: 3D панели.\n\nВыберите размер панели:",
-                reply_markup=build_3d_variant_keyboard(),
-            )
-        else:
-            await query.edit_message_text(
-                "Эта категория пока в разработке. Сейчас могу посчитать только стеновые, реечные и 3D панели."
-            )
+    if cat == "walls":
+        await query.edit_message_text(
+            "Категория: Стеновые панели.\n\nШаг 1. Выберите тип панели:",
+            reply_markup=build_wall_product_keyboard(),
+        )
+    elif cat == "slats":
+        await query.edit_message_text(
+            "Категория: Реечные панели.\n\nВыберите тип:",
+            reply_markup=build_slats_category_keyboard(),
+        )
+    elif cat == "3d":
+        await query.edit_message_text(
+            "Категория: 3D панели.\n\nВыберите размер панели:",
+            reply_markup=build_3d_variant_keyboard(),
+        )
+    else:
+        await query.edit_message_text(
+            "Эта категория пока в разработке. Сейчас могу посчитать только стеновые, реечные и 3D панели."
+        )
+    return  # <- return внутри блока if, на том же уровне отступа
+
+# РЕЕЧНЫЕ: выбор типа
+if action == "slats_type" and len(parts) >= 2:
+    base_type = parts[1]
+
+    if base_type == "wpc":
+        context.chat_data["slats_base_type"] = "wpc"
+        await query.edit_message_text(
+            "Тип: WPC реечная панель.\n\nВыберите вариант:",
+            reply_markup=build_wpc_slats_name_keyboard(),
+        )
         return
 
-    # РЕЕЧНЫЕ: выбор типа
-    if action == "slats_type" and len(parts) >= 2:
-        base_type = parts[1]
+    elif base_type == "wood":
+        context.chat_data["slats_base_type"] = "wood"
+        items = context.chat_data.get("calc_items", [])
+        items.append({"category": "slats", "base_type": "wood"})
+        context.chat_data["calc_items"] = items
 
-        if base_type == "wpc":
-            context.chat_data["slats_base_type"] = "wpc"
-            await query.edit_message_text(
-                "Тип: WPC реечная панель.\n\nВыберите вариант:",
-                reply_markup=build_wpc_slats_name_keyboard(),
-            )
-            return
+        await query.edit_message_text(
+            "Реечные панели — Деревянная панель добавлена в расчёт.\n\n"
+            f"Ориентировочная цена: {SLAT_PRICES['wood']} ₽ за панель.\n\n"
+            "После ввода размеров я предложу указать название/артикул (если он важен).",
+            reply_markup=build_add_more_materials_keyboard(),
+        )
+        return
 
-        elif base_type == "wood":
-            context.chat_data["slats_base_type"] = "wood"
-            items = context.chat_data.get("calc_items", [])
-            items.append({"category": "slats", "base_type": "wood"})
-            context.chat_data["calc_items"] = items
+    else:
+        await query.edit_message_text(
+            "Не удалось определить тип реечной панели. Попробуйте ещё раз."
+        )
+        return
 
-            await query.edit_message_text(
-                "Реечные панели — Деревянная панель добавлена в расчёт.\n\n"
-                f"Ориентировочная цена: {SLAT_PRICES['wood']} ₽ за панель.\n\n"
-                "После ввода размеров я предложу указать название/артикул (если он важен).",
-                reply_markup=build_add_more_materials_keyboard(),
-            )
-            return
-
-        else:
-            await query.edit_message_text(
-                "Не удалось определить тип реечной панели. Попробуйте ещё раз."
-            )
-            return
 
 
     # РЕЕЧНЫЕ WPC: выбор варианта
