@@ -1168,6 +1168,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
 
+
     # РЕЕЧНЫЕ WPC: выбор варианта
     if action == "slats_wpc_name" and len(parts) >= 2:
         name_code = parts[1]
