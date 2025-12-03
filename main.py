@@ -1168,7 +1168,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
 
-
     # РЕЕЧНЫЕ WPC: выбор варианта
     if action == "slats_wpc_name" and len(parts) >= 2:
         name_code = parts[1]
@@ -1184,7 +1183,7 @@ await query.edit_message_text(
     reply_markup=build_add_more_materials_keyboard(),
 )
 
-    return
+        return
 
     # 3D панели: выбор варианта
     if action == "3d_variant" and len(parts) >= 2:
