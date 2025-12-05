@@ -389,6 +389,12 @@ def build_contacts_keyboard() -> InlineKeyboardMarkup:
     rows += build_back_row()
     return InlineKeyboardMarkup(rows)
 
+def build_unit_keyboard() -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton("мм", callback_data="unit|mm"), InlineKeyboardButton("м", callback_data="unit|m")],
+    ]
+    return InlineKeyboardMarkup(rows)
+
 
 def format_wall_catalog() -> str:
     lines = []
@@ -434,20 +440,23 @@ def get_calc_selection_block(context: ContextTypes.DEFAULT_TYPE) -> str:
     return "\n".join(lines)
 
 # Новая функция для парсинга и суммирования размеров стен (в мм)
-def parse_and_sum_sizes(text):
+def parse_and_sum_sizes(text, unit='mm'):
     sizes = re.findall(r'(\d+(?:\.\d+)?)\s*(м|мм|metr|meter|meters|mm)?', text.lower())
     total = 0.0
-    for num, unit in sizes:
+    for num, u in sizes:
         num = float(num)
-        if unit in ['м', 'metr', 'meter', 'meters']:
+        if u in ['м', 'metr', 'meter', 'meters']:
             num *= 1000  # в мм
-        if num < 1000 and not unit:
-            num *= 1000  # <1000 без единиц - метры
+        elif u in ['мм', 'mm']:
+            pass  # уже в мм
+        else:  # без единиц
+            if unit == 'm':
+                num *= 1000
         total += num
     return total
 
 # Новая функция для парсинга размеров окна/двери (ширина x высота в мм)
-def parse_dimensions(text):
+def parse_dimensions(text, unit='mm'):
     # Разделяем по x, х, *, ,, пробелам
     parts = re.split(r'[xх* ,]+', text.lower())
     nums_units = re.findall(r'(\d+(?:\.\d+)?)\s*(м|мм|metr|meter|meters|mm)?', text.lower())
@@ -456,12 +465,18 @@ def parse_dimensions(text):
         h_num, h_unit = float(nums_units[1][0]), nums_units[1][1]
         if w_unit in ['м', 'metr', 'meter', 'meters']:
             w_num *= 1000
-        if w_num < 1000 and not w_unit:
-            w_num *= 1000
+        elif w_unit in ['мм', 'mm']:
+            pass
+        else:
+            if unit == 'm':
+                w_num *= 1000
         if h_unit in ['м', 'metr', 'meter', 'meters']:
             h_num *= 1000
-        if h_num < 1000 and not h_unit:
-            h_num *= 1000
+        elif h_unit in ['мм', 'mm']:
+            pass
+        else:
+            if unit == 'm':
+                h_num *= 1000
         return w_num, h_num
     return None
 
@@ -914,6 +929,7 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["windows"] = []
     context.chat_data["doors"] = []
     context.chat_data["await_size_type"] = None
+    context.chat_data["unit"] = None
 
 
 # ============================
@@ -1008,10 +1024,31 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if sub == "skip":
             context.chat_data["await_custom_name_index"] = None
             if context.chat_data.get("calc_phase") == "await_custom_name_after_selection":
-                await query.edit_message_text(
-                    "Панель добавлена без названия.\n\nДобавить ещё материалы?",
-                    reply_markup=build_add_more_materials_keyboard(),
-                )
+                # Переходим к размерам вместо add_more
+                context.chat_data["materials_locked"] = True
+                items = context.chat_data.get("calc_items", [])
+                cats = [it.get("category") for it in items]
+                order = []
+                if "walls" in cats:
+                    order.append("walls")
+                if "slats" in cats:
+                    order.append("slats")
+                if "3d" in cats:
+                    order.append("3d")
+                context.chat_data["width_questions_queue"] = order
+                context.chat_data["width_answers"] = {}
+
+                if order:
+                    context.chat_data["calc_phase"] = "ask_unit"
+                    await query.edit_message_text(
+                        "Панель добавлена без названия.\n\nВ каких единицах измерения будете писать размеры?",
+                        reply_markup=build_unit_keyboard(),
+                    )
+                else:
+                    await query.edit_message_text(
+                        "Сначала выберите хотя бы один материал, а затем вернитесь к расчёту.",
+                        reply_markup=build_calc_category_keyboard(),
+                    )
             else:
                 context.chat_data["calc_phase"] = "height_mode"
                 await query.edit_message_text(
@@ -1415,32 +1452,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.chat_data["width_answers"] = {}
 
             if order:
-                first = order[0]
-                context.chat_data["current_width_cat"] = first
-                context.chat_data["calc_phase"] = "widths"  # Исправлено: явно устанавливаем phase
-                context.chat_data["await_room_height"] = False
-                context.chat_data["room_height"] = None
-                context.chat_data["height_mode"] = None
-
-                if first == "walls":
-                    qtext = (
-                        "Перед расчётом уточните:\n\n"
-                        "❓ Сколько по ширине займут стеновые панели на стене?\n"
-                        "Например: 3 м + 2.5 м + 2500 мм"
-                    )
-                elif first == "slats":
-                    qtext = (
-                        "Перед расчётом уточните:\n\n"
-                        "❓ Сколько по ширине стены займут реечные панели?\n"
-                        "Например: 1.5 м, 1200 мм и т.п."
-                    )
-                else:  # 3d
-                    qtext = (
-                        "Перед расчётом уточните:\n\n"
-                        "❓ Сколько по ширине стены займут 3D панели?\n"
-                        "Например: 2 м, 1800 мм и т.п."
-                    )
-                await query.edit_message_text(qtext)
+                context.chat_data["calc_phase"] = "ask_unit"
+                await query.edit_message_text(
+                    "В каких единицах измерения будете писать размеры?",
+                    reply_markup=build_unit_keyboard(),
+                )
             else:
                 await query.edit_message_text(
                     "Сначала выберите хотя бы один материал, а затем вернитесь к расчёту.",
@@ -1448,13 +1464,44 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             return
 
+    # Выбор единиц
+    if action == "unit" and len(parts) >= 2:
+        sub = parts[1]
+        context.chat_data["unit"] = sub
+        queue = context.chat_data.get("width_questions_queue", [])
+        if queue:
+            first = queue[0]
+            context.chat_data["current_width_cat"] = first
+            context.chat_data["calc_phase"] = "widths"
+
+            if first == "walls":
+                qtext = (
+                    "Перед расчётом уточните:\n\n"
+                    "❓ Сколько по ширине займут стеновые панели на стене?\n"
+                    f"Например: 3 + 2.5 + 2500 (в {sub})"
+                )
+            elif first == "slats":
+                qtext = (
+                    "Перед расчётом уточните:\n\n"
+                    "❓ Сколько по ширине стены займут реечные панели?\n"
+                    f"Например: 1.5, 1200 (в {sub})"
+                )
+            else:  # 3d
+                qtext = (
+                    "Перед расчётом уточните:\n\n"
+                    "❓ Сколько по ширине стены займут 3D панели?\n"
+                    f"Например: 2, 1800 (в {sub})"
+                )
+            await query.edit_message_text(qtext)
+        return
+
     # Добавление окон/дверей
     if action == "add" and len(parts) >= 2:
         sub = parts[1]
         if sub in ["window", "door"]:
             context.chat_data["await_size_type"] = sub
             await query.message.reply_text(
-                f"Укажите размеры { 'окна' if sub == 'window' else 'двери' }: ширина x высота (например, 1.2 м x 2 м)"
+                f"Укажите размеры { 'окна' if sub == 'window' else 'двери' }: ширина x высота (например, 1.2 x 2)"
             )
             return
 
@@ -1638,11 +1685,31 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.chat_data["await_custom_name_index"] = None
 
             if calc_phase == "await_custom_name_after_selection":
-                await update.message.reply_text(
-                    f"Зафиксировал название/артикул: <b>{user_text.strip()}</b>.\n\nДобавить ещё материалы?",
-                    parse_mode="HTML",
-                    reply_markup=build_add_more_materials_keyboard(),
-                )
+                # Переходим к размерам вместо add_more
+                context.chat_data["materials_locked"] = True
+                cats = [it.get("category") for it in items]
+                order = []
+                if "walls" in cats:
+                    order.append("walls")
+                if "slats" in cats:
+                    order.append("slats")
+                if "3d" in cats:
+                    order.append("3d")
+                context.chat_data["width_questions_queue"] = order
+                context.chat_data["width_answers"] = {}
+
+                if order:
+                    context.chat_data["calc_phase"] = "ask_unit"
+                    await update.message.reply_text(
+                        f"Зафиксировал название/артикул: <b>{user_text.strip()}</b>.\n\nВ каких единицах измерения будете писать размеры?",
+                        parse_mode="HTML",
+                        reply_markup=build_unit_keyboard(),
+                    )
+                else:
+                    await update.message.reply_text(
+                        "Сначала выберите хотя бы один материал, а затем вернитесь к расчёту.",
+                        reply_markup=build_calc_category_keyboard(),
+                    )
             else:
                 await update.message.reply_text(
                     f"Зафиксировал название/артикул: <b>{user_text.strip()}</b>.\n"
@@ -1659,18 +1726,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Обработка размеров окна/двери
     await_size_type = context.chat_data.get("await_size_type")
     if await_size_type:
-        dims = parse_dimensions(user_text)
+        dims = parse_dimensions(user_text, context.chat_data.get("unit", "mm"))
         if dims:
             if await_size_type == "window":
-                context.chat_data["windows"].append(dims)
+                windows = context.chat_data.get("windows", [])
+                windows.append(dims)
+                context.chat_data["windows"] = windows
                 await update.message.reply_text(f"Окно добавлено: {dims[0]} x {dims[1]} мм")
             else:
-                context.chat_data["doors"].append(dims)
+                doors = context.chat_data.get("doors", [])
+                doors.append(dims)
+                context.chat_data["doors"] = doors
                 await update.message.reply_text(f"Дверь добавлена: {dims[0]} x {dims[1]} мм")
             context.chat_data["await_size_type"] = None
             await update.message.reply_text("Ещё окна или двери?", reply_markup=build_windows_doors_keyboard())
         else:
-            await update.message.reply_text("Не понял размеры. Попробуйте снова: ширина x высота (например, 1.2 м x 2 м)")
+            await update.message.reply_text("Не понял размеры. Попробуйте снова: ширина x высота (например, 1.2 x 2)")
         return
 
     # 1. Вопросы по ширине/высоте на этапе расчёта
@@ -1695,9 +1766,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         current_cat = context.chat_data.get("current_width_cat")
         queue = context.chat_data.get("width_questions_queue") or []
         if calc_phase == "widths" and current_cat:
+            unit = context.chat_data.get("unit", "mm")
             if current_cat == "walls":
                 # Парсим и суммируем для стеновых панелей
-                total_width_mm = parse_and_sum_sizes(user_text)
+                total_width_mm = parse_and_sum_sizes(user_text, unit)
                 wa = context.chat_data.get("width_answers", {})
                 wa[current_cat] = f"{total_width_mm} мм"
                 context.chat_data["width_answers"] = wa
@@ -1718,19 +1790,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     qtext = (
                         "Спасибо! Теперь:\n\n"
                         "❓ Сколько по ширине займут стеновые панели на стене?\n"
-                        "Например: 3 м + 2.5 м + 2500 мм"
+                        f"Например: 3 + 2.5 + 2500 (в {unit})"
                     )
                 elif next_cat == "slats":
                     qtext = (
                         "Спасибо! Теперь:\n\n"
                         "❓ Сколько по ширине стены займут реечные панели?\n"
-                        "Например: 1.5 м, 1200 мм и т.п."
+                        f"Например: 1.5, 1200 (в {unit})"
                     )
                 else:  # 3d
                     qtext = (
                         "Спасибо! Теперь:\n\n"
                         "❓ Сколько по ширине стены займут 3D панели?\n"
-                        "Например: 2 м, 1800 мм и т.п."
+                        f"Например: 2, 1800 (в {unit})"
                     )
                 await update.message.reply_text(qtext)
                 return
@@ -1741,7 +1813,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 context.chat_data["await_room_height"] = True
                 await update.message.reply_text(
                     "Отлично! Теперь укажите высоту помещения.\n\n"
-                    "Например: 2.7 м, 2700 мм и т.п."
+                    f"Например: 2.7, 2700 (в {unit})"
                 )
                 return
 
@@ -1763,6 +1835,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.chat_data["windows"] = []
         context.chat_data["doors"] = []
         context.chat_data["await_size_type"] = None
+        context.chat_data["unit"] = None
         return
 
     # Партнёрка
