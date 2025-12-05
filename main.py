@@ -299,8 +299,17 @@ def build_height_keyboard(product_code: str, thickness: int) -> InlineKeyboardMa
 
 def build_add_more_materials_keyboard() -> InlineKeyboardMarkup:
     rows = [
-        [InlineKeyboardButton("Добавить ещё материалы", callback_data="calc_more|yes")],
-        [InlineKeyboardButton("Перейти к расчёту", callback_data="calc_more|no")],
+        [InlineKeyboardButton("➕ Добавить ещё материалы", callback_data="calc_more|yes")],
+        [InlineKeyboardButton("🧮 Перейти к расчёту", callback_data="calc_more|no")],
+    ]
+    rows += build_back_row()
+    return InlineKeyboardMarkup(rows)
+
+
+def build_post_sizes_keyboard() -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton("➕ Добавить ещё материалы", callback_data="calc_more|yes")],
+        [InlineKeyboardButton("🧮 Сделать расчёт", callback_data="perform_calc|yes")],
     ]
     rows += build_back_row()
     return InlineKeyboardMarkup(rows)
@@ -1039,11 +1048,37 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 context.chat_data["width_answers"] = {}
 
                 if order:
-                    context.chat_data["calc_phase"] = "ask_unit"
-                    await query.edit_message_text(
-                        "Панель добавлена без названия.\n\nВ каких единицах измерения будете писать размеры?",
-                        reply_markup=build_unit_keyboard(),
-                    )
+                    if context.chat_data.get("unit"):
+                        # Если unit уже задан, перейти к ширинам
+                        first = order[0]
+                        context.chat_data["current_width_cat"] = first
+                        context.chat_data["calc_phase"] = "widths"
+                        unit = context.chat_data["unit"]
+                        if first == "walls":
+                            qtext = (
+                                "Перед расчётом уточните:\n\n"
+                                "❓ Сколько по ширине займут стеновые панели на стене?\n"
+                                f"Например: 3 + 2.5 + 2500 (в {unit})"
+                            )
+                        elif first == "slats":
+                            qtext = (
+                                "Перед расчётом уточните:\n\n"
+                                "❓ Сколько по ширине стены займут реечные панели?\n"
+                                f"Например: 1.5, 1200 (в {unit})"
+                            )
+                        else:  # 3d
+                            qtext = (
+                                "Перед расчётом уточните:\n\n"
+                                "❓ Сколько по ширине стены займут 3D панели?\n"
+                                f"Например: 2, 1800 (в {unit})"
+                            )
+                        await query.edit_message_text(qtext)
+                    else:
+                        context.chat_data["calc_phase"] = "ask_unit"
+                        await query.edit_message_text(
+                            "Панель добавлена без названия.\n\nВ каких единицах измерения будете писать размеры?",
+                            reply_markup=build_unit_keyboard(),
+                        )
                 else:
                     await query.edit_message_text(
                         "Сначала выберите хотя бы один материал, а затем вернитесь к расчёту.",
@@ -1131,14 +1166,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.chat_data["await_custom_name_index"] = None
 
             text = (
-                "🧮 Рассчитать материалы.\n\n"
+                "🧮 <b>Рассчитать материалы.</b>\n\n"
                 "Я могу посчитать:\n"
                 "• стеновые WPC панели;\n"
                 "• реечные панели (WPC и деревянные);\n"
                 "• 3D панели.\n\n"
                 "Выберите, с каких материалов начать:"
             )
-            await query.edit_message_text(text=text, reply_markup=build_calc_category_keyboard())
+            await query.edit_message_text(text=text, parse_mode="HTML", reply_markup=build_calc_category_keyboard())
             return
 
         if mode == "info":
@@ -1173,13 +1208,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if mode == "contacts":
             text = (
-                "📇 Контактная информация ECO Стены\n\n"
-                "Адрес:\nРФ, Республика Крым, г. Симферополь\n\n"
-                "Телефон:\n+7 (978) 022-32-22\n+7 (978) 706-48-97\n\n"
+                "📇 <b>Контактная информация ECO Стены</b>\n\n"
+                "<i>Адрес:</i>\nРФ, Республика Крым, г. Симферополь\n\n"
+                "<i>Телефон:</i>\n+7 (978) 022-32-22\n+7 (978) 706-48-97\n\n"
                 "Наши площадки:"
             )
             await query.edit_message_text(
                 text,
+                parse_mode="HTML",
                 reply_markup=build_contacts_keyboard(),
                 disable_web_page_preview=True,
             )
@@ -1512,8 +1548,15 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.chat_data["calc_phase"] = None
             await query.edit_message_text(
                 "Отлично, все размеры собраны.\n\nДобавить ещё материалы или перейти к расчёту?",
-                reply_markup=build_add_more_materials_keyboard(),
+                reply_markup=build_post_sizes_keyboard(),
             )
+            return
+
+    # Выполнить расчёт
+    if action == "perform_calc" and len(parts) >= 2:
+        sub = parts[1]
+        if sub == "yes":
+            await perform_text_calc(update, context)
             return
 
     # ВЫБОР РЕЖИМА ПО ВЫСОТЕ
@@ -1681,12 +1724,38 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 context.chat_data["width_answers"] = {}
 
                 if order:
-                    context.chat_data["calc_phase"] = "ask_unit"
-                    await update.message.reply_text(
-                        f"Зафиксировал название/артикул: <b>{user_text.strip()}</b>.\n\nВ каких единицах измерения будете писать размеры?",
-                        parse_mode="HTML",
-                        reply_markup=build_unit_keyboard(),
-                    )
+                    if context.chat_data.get("unit"):
+                        # Если unit уже задан, перейти к ширинам
+                        first = order[0]
+                        context.chat_data["current_width_cat"] = first
+                        context.chat_data["calc_phase"] = "widths"
+                        unit = context.chat_data["unit"]
+                        if first == "walls":
+                            qtext = (
+                                "Перед расчётом уточните:\n\n"
+                                "❓ Сколько по ширине займут стеновые панели на стене?\n"
+                                f"Например: 3 + 2.5 + 2500 (в {unit})"
+                            )
+                        elif first == "slats":
+                            qtext = (
+                                "Перед расчётом уточните:\n\n"
+                                "❓ Сколько по ширине стены займут реечные панели?\n"
+                                f"Например: 1.5, 1200 (в {unit})"
+                            )
+                        else:  # 3d
+                            qtext = (
+                                "Перед расчётом уточните:\n\n"
+                                "❓ Сколько по ширине стены займут 3D панели?\n"
+                                f"Например: 2, 1800 (в {unit})"
+                            )
+                        await update.message.reply_text(qtext)
+                    else:
+                        context.chat_data["calc_phase"] = "ask_unit"
+                        await update.message.reply_text(
+                            f"Зафиксировал название/артикул: <b>{user_text.strip()}</b>.\n\nВ каких единицах измерения будете писать размеры?",
+                            parse_mode="HTML",
+                            reply_markup=build_unit_keyboard(),
+                        )
                 else:
                     await update.message.reply_text(
                         "Сначала выберите хотя бы один материал, а затем вернитесь к расчёту.",
