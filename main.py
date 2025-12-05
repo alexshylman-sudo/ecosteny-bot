@@ -769,7 +769,7 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     windows = context.chat_data.get("windows", [])
     doors = context.chat_data.get("doors", [])
     deduct_area = sum(w * h / 1e6 for w, h in windows + doors)
-    deduct_block = f"Площадь к вычету (окна/двери): {deduct_area:.2f} м². Вычти из общей площади перед расчётом количества панелей/материалов.\n\n" if deduct_area > 0 else ""
+    deduct_block = f"Площадь к вычету (окна/двери): {deduct_area:.2f} м². ОБЯЗАТЕЛЬНО вычти эту площадь из общей площади зоны перед расчётом количества панелей/материалов, чтобы избежать перерасхода.\n\n" if deduct_area > 0 else ""
 
     extra_sizes = (
         "Дополнительные данные по материалам для расчёта:\n"
@@ -1508,30 +1508,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if action == "calc" and len(parts) >= 2:
         sub = parts[1]
         if sub == "continue":
-            # Переходим к имени (если нужно) или режиму высоты
-            items = context.chat_data.get("calc_items", [])
-            ask_name = False
-            if items:
-                last_index = len(items) - 1
-                last_item = items[last_index]
-                if not last_item.get("custom_name"):
-                    context.chat_data["await_custom_name_index"] = last_index
-                    ask_name = True
-
-            if ask_name:
-                context.chat_data["calc_phase"] = "await_custom_name_after_size"
-                text = (
-                    "Если хотите, можете сейчас указать название или артикул для последнего выбранного материала "
-                    "(например, конкретная коллекция или текстура). Просто отправьте текст следующим сообщением.\n\n"
-                    "Если не знаете название — нажмите кнопку ниже."
-                )
-                await query.edit_message_text(text, reply_markup=build_skip_name_keyboard())
-            else:
-                context.chat_data["calc_phase"] = "height_mode"
-                await query.edit_message_text(
-                    "Теперь выберите, как считать по высоте:",
-                    reply_markup=build_height_mode_keyboard(),
-                )
+            # Переходим к add_more или расчёту
+            context.chat_data["calc_phase"] = None
+            await query.edit_message_text(
+                "Отлично, все размеры собраны.\n\nДобавить ещё материалы или перейти к расчёту?",
+                reply_markup=build_add_more_materials_keyboard(),
+            )
             return
 
     # ВЫБОР РЕЖИМА ПО ВЫСОТЕ
