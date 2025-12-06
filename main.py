@@ -228,7 +228,10 @@ def build_main_menu_keyboard(is_admin: bool = False) -> InlineKeyboardMarkup:
 
 
 def build_back_row() -> list[list[InlineKeyboardButton]]:
-    return [[InlineKeyboardButton("Назад в меню", callback_data="ui|back_main")]]
+    return [[InlineKeyboardButton("Назад", callback_data="ui|back")]]
+
+def build_back_to_admin_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(build_back_row())
 
 
 def build_calc_category_keyboard() -> InlineKeyboardMarkup:
@@ -1290,6 +1293,29 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
+    # Обработка кнопок назад
+    if action == "ui" and len(parts) >= 2:
+        sub = parts[1]
+        if sub == "back":
+            if context.chat_data.get("main_mode") == "admin":
+                await query.edit_message_text("Админ панель.", reply_markup=build_admin_menu_keyboard())
+            else:
+                context.chat_data["main_mode"] = None
+                is_admin = update.effective_user.id == ADMIN_CHAT_ID
+                await query.edit_message_text(
+                    "Чем могу помочь? 👇",
+                    reply_markup=build_main_menu_keyboard(is_admin),
+                )
+            return
+        if sub == "back_main":
+            context.chat_data["main_mode"] = None
+            is_admin = update.effective_user.id == ADMIN_CHAT_ID
+            await query.edit_message_text(
+                "Чем могу помочь? 👇",
+                reply_markup=build_main_menu_keyboard(is_admin),
+            )
+            return
+
     # Если материалы   афиксированы, а человек пытается вернуться к выбору — блокируем
     if materials_locked and action in {"calc_cat", "slats_type", "slats_wpc_name", "3d_variant", "product", "thickness", "height"}:
         await query.edit_message_text(
@@ -1759,33 +1785,33 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logins_text = "Последние входы пользователей:\n\n"
             for uid, timestamp in sorted(users.items(), key=lambda x: x[1], reverse=True):
                 logins_text += f"ID: {uid}, Время: {timestamp}\n"
-            await query.edit_message_text(logins_text)
+            await query.edit_message_text(logins_text, reply_markup=build_back_to_admin_keyboard())
             return
 
         if sub == "view_calcs":
             # Здесь можно хранить все расчёты в bot_data['calcs'] = list of calcs
             # Но для примера, если нет, показать сообщение
-            await query.edit_message_text("Нет сохранённых расчётов или реализуйте хранение.")
+            await query.edit_message_text("Нет сохранённых расчётов или реализуйте хранение.", reply_markup=build_back_to_admin_keyboard())
             return
 
         if sub == "calc_cost":
             result = context.chat_data.get("last_calc_result")
             if result:
                 # Простой расчёт себестоимости, например 70% от цены
-                await query.edit_message_text(f"Себестоимость по последнему расчёту: (пример) {result}")
+                await query.edit_message_text(f"Себестоимость по последнему расчёту: (пример) {result}", reply_markup=build_back_to_admin_keyboard())
             else:
-                await query.edit_message_text("Нет последнего расчёта.")
+                await query.edit_message_text("Нет последнего расчёта.", reply_markup=build_back_to_admin_keyboard())
             return
 
         if sub == "stats":
             users = context.bot_data.get('users', {})
             stats_text = f"Всего пользователей: {len(users)}\n"
-            await query.edit_message_text(stats_text)
+            await query.edit_message_text(stats_text, reply_markup=build_back_to_admin_keyboard())
             return
 
         if sub == "broadcast":
             # Реализовать отправку сообщения всем, но нужно хранить список пользователей
-            await query.edit_message_text("Функция в разработке: отправка сообщения всем пользователям.")
+            await query.edit_message_text("Функция в разработке: отправка сообщения всем пользователям.", reply_markup=build_back_to_admin_keyboard())
             return
 
 
@@ -2210,31 +2236,4 @@ def telegram_webhook():
             update = Update.de_json(update_json, tg_application.bot)
             asyncio.create_task(tg_application.process_update(update))
         return jsonify({"status": "ok"})
-    except Exception as e:
-        print("WEBHOOK ERROR:", repr(e))
-        return jsonify({"status": "error"}), 500
-
-# ============================
-#   ЗАПУСК БОТА
-# ============================
-
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", "8443"))
-    webhook_url = os.getenv("WEBHOOK_URL")
-
-    # Прод: работаем через webhook (Render)
-    if webhook_url:
-        print(f"Запускаю webhook-сервер на порту {port}...")
-        print(f"Webhook URL: {webhook_url}/{TG_BOT_TOKEN}")
-
-        tg_application.run_webhook(
-            listen="0.0.0.0",
-            port=port,
-            url_path=TG_BOT_TOKEN,
-            webhook_url=f"{webhook_url}/{TG_BOT_TOKEN}",
-        )
-
-    # Локально (без WEBHOOK_URL) — polling
-    else:
-        print("WEBHOOK_URL не задан. Запускаю бота в режиме polling (локальный режим)...")
-        tg_application.run_polling()
+    except
