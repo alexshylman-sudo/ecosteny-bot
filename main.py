@@ -23,13 +23,11 @@ from telegram.ext import (
     filters,
 )
 
-
 import sys
 from telegram import __version__ as TG_VER
 
 print("### PYTHON VERSION ON RENDER:", sys.version)
 print("### python-telegram-bot VERSION ON RENDER:", TG_VER)
-
 
 # ============================
 #   НАСТРОЙКИ (через .env)
@@ -208,7 +206,6 @@ app = Flask(__name__)
 # Создаём приложение Telegram
 tg_application = Application.builder().token(TG_BOT_TOKEN).build()
 
-
 # ============================
 #   КЛАВИАТУРЫ
 # ============================
@@ -226,13 +223,11 @@ def build_main_menu_keyboard(is_admin: bool = False) -> InlineKeyboardMarkup:
         rows.append([InlineKeyboardButton("Администрирование", callback_data="main|admin")])
     return InlineKeyboardMarkup(rows)
 
-
 def build_back_row() -> list[list[InlineKeyboardButton]]:
     return [[InlineKeyboardButton("Назад", callback_data="ui|back")]]
 
 def build_back_to_admin_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(build_back_row())
-
 
 def build_calc_category_keyboard() -> InlineKeyboardMarkup:
     rows = [
@@ -243,14 +238,12 @@ def build_calc_category_keyboard() -> InlineKeyboardMarkup:
     rows += build_back_row()
     return InlineKeyboardMarkup(rows)
 
-
 def build_wall_product_keyboard() -> InlineKeyboardMarkup:
     buttons = []
     for code, title in PRODUCT_CODES.items():
         buttons.append([InlineKeyboardButton(text=title, callback_data=f"product|{code}")])
     buttons += build_back_row()
     return InlineKeyboardMarkup(buttons)
-    
 
 def build_after_calc_keyboard() -> InlineKeyboardMarkup:
     rows = [
@@ -266,8 +259,6 @@ def build_skip_name_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("Я не знаю → ДАЛЬШЕ", callback_data="after_name|skip")]
     ])
 
-
-
 def build_thickness_keyboard(product_code: str) -> InlineKeyboardMarkup:
     title = PRODUCT_CODES[product_code]
     thicknesses = WALL_PRODUCTS.get(title, {})
@@ -282,7 +273,6 @@ def build_thickness_keyboard(product_code: str) -> InlineKeyboardMarkup:
         rows.append(row)
     rows += build_back_row()
     return InlineKeyboardMarkup(rows)
-
 
 def build_height_keyboard(product_code: str, thickness: int) -> InlineKeyboardMarkup:
     title = PRODUCT_CODES[product_code]
@@ -302,7 +292,6 @@ def build_height_keyboard(product_code: str, thickness: int) -> InlineKeyboardMa
     rows += build_back_row()
     return InlineKeyboardMarkup(rows)
 
-
 def build_add_more_materials_keyboard() -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton("➕ Добавить ещё материалы", callback_data="calc_more|yes")],
@@ -310,7 +299,6 @@ def build_add_more_materials_keyboard() -> InlineKeyboardMarkup:
     ]
     rows += build_back_row()
     return InlineKeyboardMarkup(rows)
-
 
 def build_post_sizes_keyboard() -> InlineKeyboardMarkup:
     rows = [
@@ -320,7 +308,6 @@ def build_post_sizes_keyboard() -> InlineKeyboardMarkup:
     rows += build_back_row()
     return InlineKeyboardMarkup(rows)
 
-
 def build_slats_category_keyboard() -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton("WPC реечная панель", callback_data="slats_type|wpc")],
@@ -328,7 +315,6 @@ def build_slats_category_keyboard() -> InlineKeyboardMarkup:
     ]
     rows += build_back_row()
     return InlineKeyboardMarkup(rows)
-
 
 def build_wpc_slats_name_keyboard() -> InlineKeyboardMarkup:
     rows = [
@@ -339,7 +325,6 @@ def build_wpc_slats_name_keyboard() -> InlineKeyboardMarkup:
     rows += build_back_row()
     return InlineKeyboardMarkup(rows)
 
-
 def build_3d_variant_keyboard() -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton("600 × 1200 мм", callback_data="3d_variant|var1")],
@@ -348,7 +333,6 @@ def build_3d_variant_keyboard() -> InlineKeyboardMarkup:
     rows += build_back_row()
     return InlineKeyboardMarkup(rows)
 
-
 def build_height_mode_keyboard() -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton("Рассчитать по высоте материала", callback_data="height_mode|material")],
@@ -356,7 +340,6 @@ def build_height_mode_keyboard() -> InlineKeyboardMarkup:
     ]
     rows += build_back_row()
     return InlineKeyboardMarkup(rows)
-
 
 def build_info_category_keyboard() -> InlineKeyboardMarkup:
     rows = [
@@ -369,7 +352,6 @@ def build_info_category_keyboard() -> InlineKeyboardMarkup:
     rows += build_back_row()
     return InlineKeyboardMarkup(rows)
 
-
 def build_catalog_category_keyboard() -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton("1. Стеновые панели", callback_data="cat_cat|walls")],
@@ -381,7 +363,6 @@ def build_catalog_category_keyboard() -> InlineKeyboardMarkup:
     rows += build_back_row()
     return InlineKeyboardMarkup(rows)
 
-
 def build_partner_role_keyboard() -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton("1. Дизайнер / Архитектор", callback_data="partner_role|designer")],
@@ -391,7 +372,6 @@ def build_partner_role_keyboard() -> InlineKeyboardMarkup:
     ]
     rows += build_back_row()
     return InlineKeyboardMarkup(rows)
-
 
 def build_contacts_keyboard() -> InlineKeyboardMarkup:
     rows = [
@@ -422,7 +402,6 @@ def build_admin_menu_keyboard() -> InlineKeyboardMarkup:
     ]
     return InlineKeyboardMarkup(rows)
 
-
 def format_wall_catalog() -> str:
     lines = []
     for title, thicknesses in WALL_PRODUCTS.items():
@@ -435,7 +414,6 @@ def format_wall_catalog() -> str:
                 )
         lines.append("")
     return "\n".join(lines)
-
 
 def get_calc_selection_block(context: ContextTypes.DEFAULT_TYPE) -> str:
     items = context.chat_data.get("calc_items", [])
@@ -557,7 +535,7 @@ async def handle_smalltalk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     messages.append({"role": "user", "content": user_text})
 
     payload = {
-        "model": "gpt-4o-mini",  # Исправлено
+        "model": "gpt-4o-mini",
         "messages": messages,
         "temperature": 0.5,
     }
@@ -608,10 +586,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_greeting_with_media(update.message, context)
     await update.message.reply_text("Чем могу помочь? 👇", reply_markup=build_main_menu_keyboard(is_admin))
 
-
 async def catalog_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Фрагмент каталога стеновых WPC панелей:\n\n" + format_wall_catalog())
-
 
 async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["started"] = True
@@ -620,7 +596,6 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["materials_locked"] = False
     is_admin = update.effective_user.id == ADMIN_CHAT_ID
     await update.message.reply_text("Чем могу помочь?", reply_markup=build_main_menu_keyboard(is_admin))
-
 
 async def reply_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_CHAT_ID:
@@ -654,7 +629,6 @@ async def reply_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "Не удалось отправить сообщение клиенту. Проверьте ID или попробуйте позже."
         )
-
 
 # Новая команда для админ панели
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -797,7 +771,6 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     room_height = context.chat_data.get("room_height") or "не указано"
     height_mode = context.chat_data.get("height_mode") or "material"
 
-
     cats = [it.get("category") for it in items]
     cats_text = ", ".join(sorted(set(cats)))
 
@@ -835,8 +808,7 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "— НЕ используй таблицы и символы `|`.\n"
         "— Для КАЖДОЙ категории делай отдельный блок:\n"
         "   • первая строка: ________________________________ (строка из подчёркиваний, не меньше 30 символов);\n"
-        "   • вторая строка — заголовок категории в формате: «***🧱 Стеновые панели***», «***🎋 Реечные панели***», «***🪨 3D панели***».\n"
-        "— Далее внутри блока используй списки и эмодзи для структурирования.\n\n"
+        "   • вторая строка — заголовок категории в формате: «***🧱 Стеновые панели***», «***🎋 Реечные панели***», «***🪨 3D панели***».\n\n"
         "Интерпретация размеров от клиента:\n"
         "— если указано число с единицами (м, метр, метра, метры, мм, миллиметр и т.п.) — использовать их буквально;\n"
         "— если пользователь написал просто число < 1000 без единиц — считать, что это метры;\n"
@@ -897,9 +869,6 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if custom:
                 items_descriptions.append(f"Материал: {custom}.")
 
-
-
-
     items_block = "Подробно по выбранным материалам:\n" + "\n".join("• " + d for d in items_descriptions) + "\n\n"
 
     user_payload = (
@@ -931,9 +900,6 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "7) Ответ дай структурно и понятно для клиента, без таблиц — только текст, списки и эмодзи.\n"
     )
 
-
-
-
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {
@@ -944,7 +910,7 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
         {"role": "user", "content": user_payload},
     ]
 
-    payload = {"model": "gpt-4o-mini", "messages": messages, "temperature": 0.3}  # Исправлено
+    payload = {"model": "gpt-4o-mini", "messages": messages, "temperature": 0.3}
 
     try:
         resp = requests.post(
@@ -996,7 +962,6 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["await_size_type"] = None
     context.chat_data["unit"] = None
 
-
 # ============================
 #   CALLBACK HANDLER
 # ============================
@@ -1010,7 +975,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     action = parts[0]
 
-    # Назад в меню
     # ДЕЙСТВИЯ ПОСЛЕ РАСЧЁТА
     if action == "after_calc" and len(parts) >= 2:
         sub = parts[1]
@@ -1148,59 +1112,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             return
 
-
-
-
-
-        # 📤 отправить расчёт админу
-        if sub == "send":
-            result = context.chat_data.get("last_calc_result")
-            if not ADMIN_CHAT_ID:
-                await query.answer("Админ не настроен.", show_alert=True)
-                return
-            if not result:
-                await query.answer("Нет сохранённого расчёта для отправки.", show_alert=True)
-                return
-
-            user = query.from_user
-            username = f"@{user.username}" if user.username else "ник не указан"
-            full_name = user.full_name or ""
-            client_info_lines = [
-                f"Ник в Telegram: {username}",
-            ]
-            if full_name:
-                client_info_lines.append(f"Имя в профиле: {full_name}")
-            client_info_lines.append(f"ID пользователя: {user.id}")
-            client_info = "\n".join(client_info_lines)
-
-            text = (
-                "Новый расчёт от бота-калькулятора ECO Стены:\n\n"
-                f"{result}\n\n"
-                f"{client_info}"
-            )
-
-            try:
-                await tg_application.bot.send_message(
-                    chat_id=ADMIN_CHAT_ID,
-                    text=text,
-                    parse_mode="MarkdownV2",
-                )
-                await query.answer("Расчёт отправлен админу ✅", show_alert=True)
-            except Exception as e:
-                print("ERROR sending calc to admin:", repr(e))
-                await query.answer("Не удалось отправить расчёт админу 😔", show_alert=True)
-            return
-
-        # 🏠 вернуться в главное меню
-        if sub == "menu":
-            context.chat_data["main_mode"] = None
-            await query.edit_message_text(
-                "Чем могу помочь? 👇",
-                reply_markup=build_main_menu_keyboard(),
-            )
-            return
-
-
     main_mode = context.chat_data.get("main_mode")
     materials_locked = context.chat_data.get("materials_locked", False)
 
@@ -1316,7 +1227,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-    # Если материалы   афиксированы, а человек пытается вернуться к выбору — блокируем
+    # Если материалы зафиксированы, а человек пытается вернуться к выбору — блокируем
     if materials_locked and action in {"calc_cat", "slats_type", "slats_wpc_name", "3d_variant", "product", "thickness", "height"}:
         await query.edit_message_text(
             "Мы уже перешли к этапу расчёта.\n\n"
@@ -1324,18 +1235,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=build_main_menu_keyboard(),
         )
         return
-
-# ============================
-#   CALLBACK HANDLER (выбор материалов)
-# ============================
-    # Добавлен код из handle_materials_callback
-    query = update.callback_query
-    await query.answer()
-    data = query.data or ""
-    parts = data.split("|")
-    if not parts:
-        return
-    action = parts[0]
 
     # ============================
     #   РАСЧЁТ: выбор категории
@@ -1814,8 +1713,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("Функция в разработке: отправка сообщения всем пользователям.", reply_markup=build_back_to_admin_keyboard())
             return
 
-
-
     # PARTNER ROLE
     if action == "partner_role" and len(parts) >= 2:
         role = parts[1]
@@ -2087,8 +1984,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Если хотите начать заново — нажмите /menu, и я покажу главное меню."
     )
 
-
-
 # ============================
 #   ОБРАБОТКА ФОТО
 # ============================
@@ -2159,7 +2054,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     payload = {
-        "model": "gpt-4o",  # Исправлено
+        "model": "gpt-4o",
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": [
@@ -2236,4 +2131,6 @@ def telegram_webhook():
             update = Update.de_json(update_json, tg_application.bot)
             asyncio.create_task(tg_application.process_update(update))
         return jsonify({"status": "ok"})
-    except
+    except Exception as e:
+        print("Webhook error:", repr(e))
+        return jsonify({"status": "error"}), 500
