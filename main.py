@@ -1225,7 +1225,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text(
                 "Чем могу помочь? 👇",
                 reply_markup=build_main_menu_keyboard(is_admin),
-                )
+            )
             return
 
     # Если материалы зафиксированы, а человек пытается вернуться к выбору — блокируем
@@ -2132,22 +2132,27 @@ def telegram_webhook():
         update_json = request.get_json(force=True)
         if update_json:
             update = Update.de_json(update_json, tg_application.bot)
-            asyncio.run(tg_application.process_update(update))   # ← ВАЖНО
+            asyncio.create_task(tg_application.process_update(update))
         return jsonify({"status": "ok"})
     except Exception as e:
         print("Webhook error:", repr(e))
         return jsonify({"status": "error"}), 500
 
-
-async def setup_webhook():
-    await tg_application.initialize()
-    hostname = os.getenv("RENDER_EXTERNAL_HOSTNAME")
-    if not hostname:
-        raise ValueError("RENDER_EXTERNAL_HOSTNAME not set")
-    webhook_url = f"https://{hostname}/{TG_BOT_TOKEN}"
-    await tg_application.bot.set_webhook(webhook_url)
+def setup_webhook():
+    loop = asyncio.get_event_loop()
+    async def async_setup():
+        print("Initializing application...")
+        await tg_application.initialize()
+        hostname = os.getenv("RENDER_EXTERNAL_HOSTNAME")
+        if not hostname:
+            raise ValueError("RENDER_EXTERNAL_HOSTNAME not set")
+        webhook_url = f"https://{hostname}/{TG_BOT_TOKEN}"
+        print(f"Setting webhook to: {webhook_url}")
+        await tg_application.bot.set_webhook(webhook_url)
+        print("Webhook set successfully")
+    loop.run_until_complete(async_setup())
 
 if __name__ == "__main__":
-    asyncio.run(setup_webhook())
+    setup_webhook()
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
