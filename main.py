@@ -630,6 +630,7 @@ async def reply_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Не удалось отправить сообщение клиенту. Проверьте ID или попробуйте позже."
         )
 
+
 # Новая команда для админ панели
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_CHAT_ID:
@@ -1984,6 +1985,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Если хотите начать заново — нажмите /menu, и я покажу главное меню."
     )
 
+
+
 # ============================
 #   ОБРАБОТКА ФОТО
 # ============================
@@ -2134,3 +2137,7 @@ def telegram_webhook():
     except Exception as e:
         print("Webhook error:", repr(e))
         return jsonify({"status": "error"}), 500
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
