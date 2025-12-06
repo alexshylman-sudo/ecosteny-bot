@@ -2129,14 +2129,33 @@ def index():
 @app.route(f"/{TG_BOT_TOKEN}", methods=["POST"])
 def telegram_webhook():
     try:
+        # Проверка секретного заголовка (рекомендуется)
+        # token = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+        # if token != WEBHOOK_SECRET:
+        #     logger.warning("Bad secret token for incoming webhook")
+        #     return abort(401)
+
         update_json = request.get_json(force=True)
-        if update_json:
-            update = Update.de_json(update_json, tg_application.bot)
-            asyncio.create_task(tg_application.process_update(update))
-        return jsonify({"status": "ok"})
+        if not update_json:
+            return jsonify({"status": "no update"}), 200
+
+        update = Update.de_json(update_json, tg_application.bot)
+
+        # Выполняем асинхронную обработку в синхронном обработчике
+        try:
+            asyncio.run(tg_application.process_update(update))
+        except Exception as proc_exc:
+            # Логируем ошибки process_update отдельно
+            logger.exception("Error while processing update: %s", proc_exc)
+            # Важно: если process_update бросил исключение, вернуть 500
+            return jsonify({"status": "error", "detail": str(proc_exc)}), 500
+
+        return jsonify({"status": "ok"}), 200
+
     except Exception as e:
-        print("Webhook error:", repr(e))
-        return jsonify({"status": "error"}), 500
+        logger.exception("Webhook error: %s", e)
+        # Если что-то пошло не так до вызова process_update
+        return jsonify({"status": "error", "detail": str(e)}), 500
 
 def setup_webhook():
     loop = asyncio.get_event_loop()
