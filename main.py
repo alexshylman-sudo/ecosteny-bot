@@ -404,6 +404,15 @@ def build_unit_keyboard() -> InlineKeyboardMarkup:
     ]
     return InlineKeyboardMarkup(rows)
 
+# Новая клавиатура для админ панели
+def build_admin_menu_keyboard() -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton("Просмотреть расчёты клиентов", callback_data="admin|view_calcs")],
+        [InlineKeyboardButton("Рассчитать себестоимость", callback_data="admin|calc_cost")],
+        [InlineKeyboardButton("Вернуться в основное меню", callback_data="ui|back_main")],
+    ]
+    return InlineKeyboardMarkup(rows)
+
 
 def format_wall_catalog() -> str:
     lines = []
@@ -628,6 +637,15 @@ async def reply_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Не удалось отправить сообщение клиенту. Проверьте ID или попробуйте позже."
         )
 
+
+# Новая команда для админ панели
+async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_CHAT_ID:
+        await update.message.reply_text("Эта команда доступна только администратору.")
+        return
+    context.chat_data["main_mode"] = "admin"
+    await update.message.reply_text("Добро пожаловать в админ панель.", reply_markup=build_admin_menu_keyboard())
+
 # ============================
 #   ПАРТНЁРКА
 # ============================
@@ -805,6 +823,26 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "— если указано число с единицами (м, метр, метра, метры, мм, миллиметр и т.п.) — использовать их буквально;\n"
         "— если пользователь написал просто число < 1000 без единиц — считать, что это метры;\n"
         "— если написал число ≥ 1000 без единиц — считать, что это миллиметры.\n\n"
+        "Для блока стеновых панелей строго следуй этому шаблону с Markdown форматированием (*курсив*, **жирный**, - списки):\n"
+        "**Выбранный материал:** [base_title] ([custom_name если есть]), толщина [thickness] мм, высота [height] мм.\n\n"
+        "**Ширина зоны отделки:** [width_mm] мм ([width_m] м)\n"
+        "**Высота помещения:** [room_height_mm] мм ([room_height_m] м)\n"
+        "**Площадь к вычету (окна/двери):** [deduct_area] м²\n\n"
+        "**Расчёт площади:**\n"
+        "- Общая площадь зоны: [width_m] × [room_height_m] = [total_area] м²\n"
+        "- Итоговая площадь для покрытия: [total_area] - [deduct_area] = [net_area] м²\n\n"
+        "**Площадь одной панели:** [panel_area] м²\n\n"
+        "**Количество панелей:** [net_area] / [panel_area] ≈ [calculated_number], округляем до [rounded_number]\n\n"
+        "**Суммарная площадь закупаемых панелей:** [rounded_number] × [panel_area] = [purchased_area] м²\n\n"
+        "**Отходы:**\n"
+        "- Площадь отходов: [purchased_area] - [net_area] = [waste_area] м²\n"
+        "- Процент отходов: ([waste_area] / [purchased_area]) × 100 ≈ [waste_percent]%\n\n"
+        "**Ориентировочная стоимость:** [rounded_number] × [price_per_panel] = [total_cost] ₽\n\n"
+        "**Итог:**\n"
+        "- Необходимое количество панелей: [rounded_number]\n"
+        "- Общая стоимость: [total_cost] ₽\n"
+        "- Отходы: [waste_area] м² ([waste_percent]%)\n\n"
+        "Для реечных и 3D панелей используй аналогичный шаблон, адаптируя для шт (не площадь), с расчётом количества штук вместо площади панели.\n"
     )
 
     items_descriptions = []
@@ -906,13 +944,13 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
         answer = "Извините, сейчас не могу выполнить расчёт. Попробуйте чуть позже."
 
     warning = (
-        "<b>Внимание: расчёт, выполненный ботом-калькулятором, не является окончательным.\n"
-        "Для точного подбора материалов и окончательного просчёта обязательно свяжитесь с менеджером ECO Стены.</b>\n\n"
+        "*Внимание:* расчёт, выполненный ботом\-калькулятором, не является окончательным\.\n"
+        "Для точного подбора материалов и окончательного просчёта обязательно свяжитесь с менеджером ECO Стены\.\n\n"
     )
     full_answer = warning + answer
 
     # отправляем расчёт клиенту
-    await update.effective_message.reply_text(full_answer, parse_mode="HTML")
+    await update.effective_message.reply_text(full_answer, parse_mode="MarkdownV2")
 
     # сохраняем результат для возможной отправки админу
     context.chat_data["last_calc_result"] = full_answer
@@ -1009,7 +1047,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await tg_application.bot.send_message(
                     chat_id=ADMIN_CHAT_ID,
                     text=text,
-                    parse_mode="HTML",
+                    parse_mode="MarkdownV2",
                 )
                 await query.answer("Расчёт отправлен админу ✅", show_alert=True)
             except Exception as e:
@@ -1127,7 +1165,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await tg_application.bot.send_message(
                     chat_id=ADMIN_CHAT_ID,
                     text=text,
-                    parse_mode="HTML",
+                    parse_mode="MarkdownV2",
                 )
                 await query.answer("Расчёт отправлен админу ✅", show_alert=True)
             except Exception as e:
@@ -1166,14 +1204,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.chat_data["await_custom_name_index"] = None
 
             text = (
-                "🧮 <b>Рассчитать материалы.</b>\n\n"
+                "🧮 *Рассчитать материалы\.*\n\n"
                 "Я могу посчитать:\n"
                 "• стеновые WPC панели;\n"
                 "• реечные панели (WPC и деревянные);\n"
                 "• 3D панели.\n\n"
                 "Выберите, с каких материалов начать:"
             )
-            await query.edit_message_text(text=text, parse_mode="HTML", reply_markup=build_calc_category_keyboard())
+            await query.edit_message_text(text=text, parse_mode="MarkdownV2", reply_markup=build_calc_category_keyboard())
             return
 
         if mode == "info":
@@ -1208,14 +1246,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if mode == "contacts":
             text = (
-                "📇 <b>Контактная информация ECO Стены</b>\n\n"
-                "<i>Адрес:</i>\nРФ, Республика Крым, г. Симферополь\n\n"
-                "<i>Телефон:</i>\n+7 (978) 022-32-22\n+7 (978) 706-48-97\n\n"
+                "📇 *Контактная информация ECO Стены*\n\n"
+                "_Адрес:_\nРФ, Республика Крым, г. Симферополь\n\n"
+                "_Телефон:_\n+7 (978) 022\-32\-22\n+7 (978) 706\-48\-97\n\n"
                 "Наши площадки:"
             )
             await query.edit_message_text(
                 text,
-                parse_mode="HTML",
+                parse_mode="MarkdownV2",
                 reply_markup=build_contacts_keyboard(),
                 disable_web_page_preview=True,
             )
@@ -1488,11 +1526,37 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.chat_data["width_answers"] = {}
 
             if order:
-                context.chat_data["calc_phase"] = "ask_unit"
-                await query.edit_message_text(
-                    "В каких единицах измерения будете писать размеры?",
-                    reply_markup=build_unit_keyboard(),
-                )
+                if context.chat_data.get("unit"):
+                    # proceed to first width
+                    first = order[0]
+                    context.chat_data["current_width_cat"] = first
+                    context.chat_data["calc_phase"] = "widths"
+                    unit = context.chat_data["unit"]
+                    if first == "walls":
+                        qtext = (
+                            "Перед расчётом уточните:\n\n"
+                            "❓ Сколько по ширине займут стеновые панели на стене?\n"
+                            f"Например: 3 + 2.5 + 2500 (в {unit})"
+                        )
+                    elif first == "slats":
+                        qtext = (
+                            "Перед расчётом уточните:\n\n"
+                            "❓ Сколько по ширине стены займут реечные панели?\n"
+                            f"Например: 1.5, 1200 (в {unit})"
+                        )
+                    else:  # 3d
+                        qtext = (
+                            "Перед расчётом уточните:\n\n"
+                            "❓ Сколько по ширине стены займут 3D панели?\n"
+                            f"Например: 2, 1800 (в {unit})"
+                        )
+                    await query.edit_message_text(qtext)
+                else:
+                    context.chat_data["calc_phase"] = "ask_unit"
+                    await query.edit_message_text(
+                        "В каких единицах измерения будете писать размеры?",
+                        reply_markup=build_unit_keyboard(),
+                    )
             else:
                 await query.edit_message_text(
                     "Сначала выберите хотя бы один материал, а затем вернитесь к расчёту.",
@@ -1572,15 +1636,15 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if cat == "walls":
             text = (
-                "🧱 <b>Стеновые WPC панели</b>\n\n"
+                "🧱 *Стеновые WPC панели*\n\n"
                 "• Толщина: 5 и 8 мм\n"
                 "• Ширина листа: 1220 мм\n"
                 "• Высоты (мм): 2440 / 2600 / 2800 / 3000 / 3200\n\n"
                 "💰 Цены зависят от серии и высоты панели — уточняются по прайсу.\n"
                 "⚖ Вес: ориентировочно 9–15 кг за лист.\n\n"
-                "📦 Применение: стены, ниши, ТВ-зоны, коридоры, коммерческие помещения."
+                "📦 Применение: стены, ниши, ТВ\-зоны, коридоры, коммерческие помещения."
             )
-            await query.edit_message_text(text, parse_mode="HTML")
+            await query.edit_message_text(text, parse_mode="MarkdownV2")
             context.chat_data["main_mode"] = None
             await query.message.reply_text(
                 "Чем могу помочь дальше? 👇",
@@ -1590,15 +1654,15 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif cat == "slats":
             text = (
-                "🎋 <b>Реечные панели</b>\n\n"
+                "🎋 *Реечные панели*\n\n"
                 "• Типы: WPC и деревянные\n"
                 "• Размер: 168 × 2900 × 18 мм\n\n"
                 f"💰 Ориентировочные цены:\n"
                 f"• WPC рейка — ~{SLAT_PRICES['wpc']} ₽/шт\n"
                 f"• Деревянная рейка — ~{SLAT_PRICES['wood']} ₽/шт\n\n"
-                "📏 Применение: акцентные стены, ТВ-зоны, коридоры, зонирование."
+                "📏 Применение: акцентные стены, ТВ\-зоны, коридоры, зонирование."
             )
-            await query.edit_message_text(text, parse_mode="HTML")
+            await query.edit_message_text(text, parse_mode="MarkdownV2")
             context.chat_data["main_mode"] = None
             await query.message.reply_text(
                 "Чем могу помочь дальше? 👇",
@@ -1608,13 +1672,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif cat == "3d":
             text = (
-                "🪨 <b>3D панели (скалы)</b>\n\n"
+                "🪨 *3D панели (скалы)*\n\n"
                 "• Форматы:\n"
                 f"  — 600 × 1200 мм — ~{PANELS_3D['var1']['price_rub']} ₽/шт\n"
                 f"  — 1200 × 3000 мм — ~{PANELS_3D['var2']['price_rub']} ₽/шт\n\n"
-                "📏 Применение: ТВ-зоны, акцентные стены, лестничные марши, зоны каминов."
+                "📏 Применение: ТВ\-зоны, акцентные стены, лестничные марши, зоны каминов."
             )
-            await query.edit_message_text(text, parse_mode="HTML")
+            await query.edit_message_text(text, parse_mode="MarkdownV2")
             context.chat_data["main_mode"] = None
             await query.message.reply_text(
                 "Чем могу помочь дальше? 👇",
@@ -1624,13 +1688,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif cat == "flex":
             text = (
-                "🧱 <b>Гибкая керамика</b>\n\n"
+                "🧱 *Гибкая керамика*\n\n"
                 "• Формат: тонкий гибкий материал под кирпич/камень.\n"
                 "• Применение: фасады, кухни, коридоры, колонны, радиусы.\n\n"
                 "Прайс и точный состав можно подключить отдельным блоком.\n"
                 "Напишите, где планируете использовать — подскажу, подойдёт ли гибкая керамика."
             )
-            await query.edit_message_text(text, parse_mode="HTML")
+            await query.edit_message_text(text, parse_mode="MarkdownV2")
             context.chat_data["main_mode"] = None
             await query.message.reply_text(
                 "Чем могу помочь дальше? 👇",
@@ -1640,13 +1704,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif cat == "delivery":
             text = (
-                "🚚 <b>Доставка и гарантия</b>\n\n"
+                "🚚 *Доставка и гарантия*\n\n"
                 "• Доставка по РФ и Крыму — условия зависят от объёма и региона.\n"
                 "• Возможен самовывоз со склада (по договорённости).\n\n"
                 "🛡 Гарантия: при правильном монтаже панели служат много лет.\n"
                 "Детальный гарантийный талон и сертификаты можно оформить отдельным блоком."
             )
-            await query.edit_message_text(text, parse_mode="HTML")
+            await query.edit_message_text(text, parse_mode="MarkdownV2")
             context.chat_data["main_mode"] = None
             await query.message.reply_text(
                 "Чем могу помочь дальше? 👇",
@@ -1752,8 +1816,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     else:
                         context.chat_data["calc_phase"] = "ask_unit"
                         await update.message.reply_text(
-                            f"Зафиксировал название/артикул: <b>{user_text.strip()}</b>.\n\nВ каких единицах измерения будете писать размеры?",
-                            parse_mode="HTML",
+                            f"Зафиксировал название/артикул: *{user_text.strip()}*.\n\nВ каких единицах измерения будете писать размеры?",
+                            parse_mode="MarkdownV2",
                             reply_markup=build_unit_keyboard(),
                         )
                 else:
@@ -1763,9 +1827,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
             else:
                 await update.message.reply_text(
-                    f"Зафиксировал название/артикул: <b>{user_text.strip()}</b>.\n"
+                    f"Зафиксировал название/артикул: *{user_text.strip()}*.\n"
                     "Теперь выберите, как считать по высоте:",
-                    parse_mode="HTML",
+                    parse_mode="MarkdownV2",
                 )
                 context.chat_data["calc_phase"] = "height_mode"
                 await update.message.reply_text(
@@ -2038,12 +2102,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
     warning = (
-        "<b>Внимание: расчёт, выполненный ботом-калькулятором, не является окончательным.\n"
-        "Для точного подбора материалов и окончательного просчёта обязательно свяжитесь с менеджером ECO Стены.</b>\n\n"
+        "*Внимание:* расчёт, выполненный ботом\-калькулятором, не является окончательным\.\n"
+        "Для точного подбора материалов и окончательного просчёта обязательно свяжитесь с менеджером ECO Стены\.\n\n"
     )
     full_answer = warning + answer
 
-    await update.message.reply_text(full_answer, parse_mode="HTML")
+    await update.message.reply_text(full_answer, parse_mode="MarkdownV2")
     context.chat_data["plan_description"] = answer
 
 # ============================
@@ -2062,6 +2126,7 @@ tg_application.add_handler(CommandHandler("catalog", catalog_command))
 tg_application.add_handler(CommandHandler("menu", menu_command))
 if ADMIN_CHAT_ID:
     tg_application.add_handler(CommandHandler("reply", reply_command))
+    tg_application.add_handler(CommandHandler("admin", admin_command))  # Новая команда для админ панели
 
 tg_application.add_handler(CallbackQueryHandler(handle_callback))
 
