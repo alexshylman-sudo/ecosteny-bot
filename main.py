@@ -213,15 +213,18 @@ tg_application = Application.builder().token(TG_BOT_TOKEN).build()
 #   КЛАВИАТУРЫ
 # ============================
 
-def build_main_menu_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
+def build_main_menu_keyboard(is_admin: bool = False) -> InlineKeyboardMarkup:
+    rows = [
         [InlineKeyboardButton("Рассчитать материалы", callback_data="main|calc")],
         [InlineKeyboardButton("Информация", callback_data="main|info")],
         [InlineKeyboardButton("Получить каталоги", callback_data="main|catalogs")],
         [InlineKeyboardButton("Получить презентацию", callback_data="main|presentation")],
         [InlineKeyboardButton("Контактная информация", callback_data="main|contacts")],
         [InlineKeyboardButton("Хочу стать партнёром", callback_data="main|partner")],
-    ])
+    ]
+    if is_admin:
+        rows.append([InlineKeyboardButton("Администрирование", callback_data="main|admin")])
+    return InlineKeyboardMarkup(rows)
 
 
 def build_back_row() -> list[list[InlineKeyboardButton]]:
@@ -407,8 +410,11 @@ def build_unit_keyboard() -> InlineKeyboardMarkup:
 # Новая клавиатура для админ панели
 def build_admin_menu_keyboard() -> InlineKeyboardMarkup:
     rows = [
+        [InlineKeyboardButton("Последние входы пользователей", callback_data="admin|view_logins")],
         [InlineKeyboardButton("Просмотреть расчёты клиентов", callback_data="admin|view_calcs")],
         [InlineKeyboardButton("Рассчитать себестоимость", callback_data="admin|calc_cost")],
+        [InlineKeyboardButton("Статистика пользователей", callback_data="admin|stats")],
+        [InlineKeyboardButton("Отправить сообщение всем", callback_data="admin|broadcast")],
         [InlineKeyboardButton("Вернуться в основное меню", callback_data="ui|back_main")],
     ]
     return InlineKeyboardMarkup(rows)
@@ -588,8 +594,16 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["materials_locked"] = False
     context.chat_data["await_custom_name_index"] = None
 
+    user_id = update.effective_user.id
+    # Логируем вход
+    if 'users' not in context.bot_data:
+        context.bot_data['users'] = {}
+    context.bot_data['users'][user_id] = datetime.now(timezone.utc).isoformat()
+
+    is_admin = user_id == ADMIN_CHAT_ID
+
     await send_greeting_with_media(update.message, context)
-    await update.message.reply_text("Чем могу помочь? 👇", reply_markup=build_main_menu_keyboard())
+    await update.message.reply_text("Чем могу помочь? 👇", reply_markup=build_main_menu_keyboard(is_admin))
 
 
 async def catalog_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -601,7 +615,8 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.chat_data["main_mode"] = None
     context.chat_data["calc_phase"] = None
     context.chat_data["materials_locked"] = False
-    await update.message.reply_text("Чем могу помочь?", reply_markup=build_main_menu_keyboard())
+    is_admin = update.effective_user.id == ADMIN_CHAT_ID
+    await update.message.reply_text("Чем могу помочь?", reply_markup=build_main_menu_keyboard(is_admin))
 
 
 async def reply_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1267,6 +1282,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
+        if mode == "admin" and update.effective_user.id == ADMIN_CHAT_ID:
+            context.chat_data["main_mode"] = "admin"
+            await query.edit_message_text(
+                "Добро пожаловать в админ панель.",
+                reply_markup=build_admin_menu_keyboard(),
+            )
+            return
+
     # Если материалы   афиксированы, а человек пытается вернуться к выбору — блокируем
     if materials_locked and action in {"calc_cat", "slats_type", "slats_wpc_name", "3d_variant", "product", "thickness", "height"}:
         await query.edit_message_text(
@@ -1725,6 +1748,44 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Чем могу помочь дальше? 👇",
                 reply_markup=build_main_menu_keyboard(),
             )
+            return
+
+    # Админ действия
+    if action == "admin" and update.effective_user.id == ADMIN_CHAT_ID and len(parts) >= 2:
+        sub = parts[1]
+
+        if sub == "view_logins":
+            users = context.bot_data.get('users', {})
+            logins_text = "Последние входы пользователей:\n\n"
+            for uid, timestamp in sorted(users.items(), key=lambda x: x[1], reverse=True):
+                logins_text += f"ID: {uid}, Время: {timestamp}\n"
+            await query.edit_message_text(logins_text)
+            return
+
+        if sub == "view_calcs":
+            # Здесь можно хранить все расчёты в bot_data['calcs'] = list of calcs
+            # Но для примера, если нет, показать сообщение
+            await query.edit_message_text("Нет сохранённых расчётов или реализуйте хранение.")
+            return
+
+        if sub == "calc_cost":
+            result = context.chat_data.get("last_calc_result")
+            if result:
+                # Простой расчёт себестоимости, например 70% от цены
+                await query.edit_message_text(f"Себестоимость по последнему расчёту: (пример) {result}")
+            else:
+                await query.edit_message_text("Нет последнего расчёта.")
+            return
+
+        if sub == "stats":
+            users = context.bot_data.get('users', {})
+            stats_text = f"Всего пользователей: {len(users)}\n"
+            await query.edit_message_text(stats_text)
+            return
+
+        if sub == "broadcast":
+            # Реализовать отправку сообщения всем, но нужно хранить список пользователей
+            await query.edit_message_text("Функция в разработке: отправка сообщения всем пользователям.")
             return
 
 
