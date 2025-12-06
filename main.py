@@ -2132,11 +2132,12 @@ def telegram_webhook():
         update_json = request.get_json(force=True)
         if update_json:
             update = Update.de_json(update_json, tg_application.bot)
-            asyncio.create_task(tg_application.process_update(update))
+            asyncio.run(tg_application.process_update(update))   # ← ВАЖНО
         return jsonify({"status": "ok"})
     except Exception as e:
         print("Webhook error:", repr(e))
         return jsonify({"status": "error"}), 500
+
 
 async def setup_webhook():
     await tg_application.initialize()
