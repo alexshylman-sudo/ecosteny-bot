@@ -251,13 +251,14 @@ def build_back_to_admin_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(build_back_row())
 
 def build_calc_category_keyboard() -> InlineKeyboardMarkup:
-    rows = [
-        [InlineKeyboardButton("🧱 1. Стеновые панели", callback_data="calc_cat|walls")],
-        [InlineKeyboardButton("🎋 2. Реечные панели", callback_data="calc_cat|slats")],
-        [InlineKeyboardButton("🪨 3. 3D панели", callback_data="calc_cat|3d")],
+    keyboard = [
+        [InlineKeyboardButton("🧱 Стеновые панели WPC", callback_data="calc_cat|walls")],
+        [InlineKeyboardButton("🔲 Реечные панели", callback_data="calc_cat|slats")],
+        [InlineKeyboardButton("🎨 3D-панели", callback_data="calc_cat|3d")],
+        [InlineKeyboardButton("🔙 В главное меню", callback_data="main|back")],
     ]
-    rows += build_back_row()
-    return InlineKeyboardMarkup(rows)
+    return InlineKeyboardMarkup(keyboard)
+
 
 def build_wall_product_keyboard() -> InlineKeyboardMarkup:
     buttons = []
@@ -987,19 +988,6 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ============================
 #   CALLBACK HANDLER
 # ============================
-    # ИСПРАВЛЕНИЕ: Обработчик для кнопки "Рассчитать материалы" (вход в режим расчёта)
-    if data == "main|calc":
-        await query.edit_message_text(
-            "🧮 Начнём расчёт материалов!\n\n"
-            "Выберите категорию для расчёта:",
-            reply_markup=build_calc_category_keyboard()
-        )
-        context.chat_data["calc_mode"] = True  # Флаг для активации расчёта в handle_message
-        context.chat_data["product"] = None  # Сброс предыдущих выборов
-        context.chat_data["thickness"] = None
-        context.chat_data["length"] = None
-        return
-
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
