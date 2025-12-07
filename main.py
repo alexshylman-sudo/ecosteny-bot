@@ -992,9 +992,11 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    logger.info(f"DEBUG: Callback received - data='{data}', user_id={query.from_user.id}")
+# Внутри async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ... (ваш существующий код выше)
 
-# Парсинг (если у вас split('|'))
+logger.info(f"DEBUG: Callback received - data='{data}', user_id={query.from_user.id}")
+
 try:
     parts = data.split('|')
     prefix = parts[0] if len(parts) > 0 else None
@@ -1003,11 +1005,24 @@ try:
 except Exception as e:
     logger.error(f"DEBUG: Parse error - {e}")
 
-    data = query.data or ""
-    parts = data.split("|")
-    if not parts:
-        return
-    action = parts[0]
+if prefix == "main":
+    if action == "calc":
+        try:
+            logger.info("DEBUG: Entering calc mode")
+            await query.edit_message_text(
+                "🧮 Выберите категорию материалов для расчёта:",
+                reply_markup=build_calc_category_keyboard()
+            )
+            context.chat_data["calc_mode"] = True
+            context.chat_data["calc_phase"] = "choose_category"
+            logger.info("DEBUG: Calc menu shown successfully")
+        except Exception as e:
+            logger.error(f"DEBUG: Error in calc handler - {e}")
+            await query.edit_message_text("❌ Ошибка при запуске расчёта. Попробуйте /menu.", reply_markup=build_main_menu_keyboard())
+        return  # <-- Этот return теперь внутри if и функции
+
+# ... (остальной код handle_callback, с отступами на уровне if выше)
+
 
     # ДЕЙСТВИЯ ПОСЛЕ РАСЧЁТА
     if action == "after_calc" and len(parts) >= 2:
