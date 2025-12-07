@@ -987,6 +987,19 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ============================
 #   CALLBACK HANDLER
 # ============================
+    # ИСПРАВЛЕНИЕ: Обработчик для кнопки "Рассчитать материалы" (вход в режим расчёта)
+    if data == "main|calc":
+        await query.edit_message_text(
+            "🧮 Начнём расчёт материалов!\n\n"
+            "Выберите категорию для расчёта:",
+            reply_markup=build_calc_category_keyboard()
+        )
+        context.chat_data["calc_mode"] = True  # Флаг для активации расчёта в handle_message
+        context.chat_data["product"] = None  # Сброс предыдущих выборов
+        context.chat_data["thickness"] = None
+        context.chat_data["length"] = None
+        return
+
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
