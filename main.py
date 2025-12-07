@@ -373,7 +373,8 @@ async def send_greeting(update: Update, context: ContextTypes.DEFAULT_TYPE):
     greeting = random.choice(GREETING_PHRASES).format(name=name)
     try:
         await context.bot.send_photo(chat_id=update.effective_chat.id, photo=WELCOME_PHOTO_URL, caption=greeting)
-    except:
+    except Exception as e:
+        logger.error(f"Error sending photo: {e}")
         await context.bot.send_message(chat_id=update.effective_chat.id, text=greeting)
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Чем могу помочь?", reply_markup=build_main_menu_keyboard())
 
@@ -692,26 +693,52 @@ tg_application.add_handler(CallbackQueryHandler(callback_handler))
 tg_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
 tg_application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
-# Webhook setup using Flask
-if __name__ == "__main__":
+# ============================
+#   WEBHOOK SETUP WITH DEBUG
+# ============================
+
+async def setup_webhook(application: Application, webhook_url: str):
+    webhook_path = f"{webhook_url}/{TG_BOT_TOKEN}"
+    await application.bot.set_webhook(url=webhook_path)
+    logger.info(f"Webhook set to: {webhook_path}")
+
+    # Check webhook info
+    info = await application.bot.get_webhook_info()
+    logger.info(f"Webhook info: url={info.url}, pending_updates={info.pending_update_count}, last_error={info.last_error_date}")
+
+@app.route("/", methods=["GET"])
+def health():
+    return "OK", 200
+
+@app.route(f"/{TG_BOT_TOKEN}", methods=["POST"])
+def webhook():
+    try:
+        update_json = request.get_json()
+        logger.info(f"Received update: {json.dumps(update_json, indent=2)[:200]}...")  # Log first 200 chars
+        if update_json:
+            update = Update.de_json(update_json, tg_application.bot)
+            asyncio.create_task(tg_application.process_update(update))  # Async process to not block
+            return jsonify({"ok": True})
+        else:
+            logger.warning("Empty update received")
+            return jsonify({"ok": False}), 400
+    except Exception as e:
+        logger.error(f"Error processing update: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+# ============================
+#   MAIN
+# ============================
+
+async def main():
     port = int(os.getenv("PORT", 8443))
     webhook_url = os.getenv("WEBHOOK_URL")
     if webhook_url:
-        # Set webhook asynchronously
-        asyncio.run(tg_application.bot.set_webhook(f"{webhook_url}/{TG_BOT_TOKEN}"))
-
-        @app.route(f"/{TG_BOT_TOKEN}", methods=["POST"])
-        def webhook():
-            update_json = request.get_json()
-            update = Update.de_json(update_json, tg_application.bot)
-            tg_application.process_update(update)
-            return jsonify({"ok": True})
-
-        # Optional: health check route
-        @app.route("/", methods=["GET"])
-        def health():
-            return "OK", 200
-
-        app.run(host="0.0.0.0", port=port)
+        await setup_webhook(tg_application, webhook_url)
+        app.run(host="0.0.0.0", port=port, debug=False)
     else:
-        tg_application.run_polling()
+        logger.info("No WEBHOOK_URL, starting polling")
+        await tg_application.run_polling()
+
+if __name__ == "__main__":
+    asyncio.run(main())
