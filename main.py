@@ -772,12 +772,18 @@ tg_application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 # ============================
 
 async def setup_webhook(application: Application, webhook_url: str):
-    # Сначала удаляем старый webhook, чтобы очистить last_error
+    # Ждём стабилизации loop
+    await asyncio.sleep(0.1)
+    
+    # Сначала удаляем старый webhook...
     try:
         await application.bot.delete_webhook(drop_pending_updates=True)
         logger.info("Old webhook deleted, pending updates dropped.")
-    except TelegramError as e:
+    except (TelegramError, RuntimeError) as e:  # Добавь RuntimeError
         logger.warning(f"Failed to delete old webhook: {e} (may not exist)")
+    
+    # ...остальное без изменений
+
 
     webhook_path = f"{webhook_url}/{TG_BOT_TOKEN}"
     await application.bot.set_webhook(url=webhook_path)
@@ -791,22 +797,28 @@ async def setup_webhook(application: Application, webhook_url: str):
 def health():
     return "OK", 200
 
-@app.route(f"/{TG_BOT_TOKEN}", methods=["POST"])
+@app.route(f"/{TG_BOT_TOKEN}", methods=["GET", "POST"])
 def webhook():
-    try:
-        update_json = request.get_json()
-        logger.info(f"Received update: {json.dumps(update_json, indent=2)[:200]}...")
-        if update_json:
-            update = Update.de_json(update_json, tg_application.bot)
-            loop = get_event_loop()
-            loop.run_until_complete(tg_application.process_update(update))
-            return jsonify({"ok": True})
-        else:
-            logger.warning("Empty update received")
-            return jsonify({"ok": False}), 400
-    except Exception as e:
-        logger.error(f"Error processing update: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
+    if request.method == "GET":
+        # Игнорируем GET (health check или probe) — просто OK
+        return jsonify({"ok": True, "method": "GET"}), 200
+    
+    if request.method == "POST":
+        try:
+            update_json = request.get_json()
+            logger.info(f"Received update: {json.dumps(update_json, indent=2)[:200]}...")
+            if update_json:
+                update = Update.de_json(update_json, tg_application.bot)
+                loop = get_event_loop()
+                loop.run_until_complete(tg_application.process_update(update))
+                return jsonify({"ok": True})
+            else:
+                logger.warning("Empty update received")
+                return jsonify({"ok": False}), 400
+        except Exception as e:
+            logger.error(f"Error processing update: {e}")
+            return jsonify({"ok": False, "error": str(e)}), 500
+
 
 # ============================
 #   MAIN
