@@ -992,6 +992,17 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    logger.info(f"DEBUG: Callback received - data='{data}', user_id={query.from_user.id}")
+
+# Парсинг (если у вас split('|'))
+try:
+    parts = data.split('|')
+    prefix = parts[0] if len(parts) > 0 else None
+    action = parts[1] if len(parts) > 1 else None
+    logger.info(f"DEBUG: Parsed - prefix='{prefix}', action='{action}'")
+except Exception as e:
+    logger.error(f"DEBUG: Parse error - {e}")
+
     data = query.data or ""
     parts = data.split("|")
     if not parts:
