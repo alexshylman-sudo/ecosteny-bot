@@ -188,6 +188,7 @@ WALL_PRODUCTS = {
     },
 }
 
+
 PRODUCT_CODES = {
     "wpc_charcoal": "WPC Бамбук угольный",
     "wpc_bamboo": "WPC Бамбук",
