@@ -38,14 +38,14 @@ if not TG_BOT_TOKEN:
     raise ValueError("Установите TG_BOT_TOKEN в .env!")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-ADMIN_CHAT_ID = 203473623  # Из ответа пользователя
+ADMIN_CHAT_ID = 203473623  # ИЗ ответа пользователя
 
 WELCOME_PHOTO_URL = "https://ecosteni.ru/wp-content/uploads/2025/11/qncccaze.jpg"
 PRESENTATION_URL = "https://ecosteni.ru/wp-content/uploads/2025/11/ecosteny_prezentacziya.pdf"
 TG_GROUP = "@ecosteni"
 
 GREETING_PHRASES = [
-    "Привет, {name}! Я ассистент компании ECO Стены. Помогу с подбором материалов и расчётом панелей. 🙂",
+    "Привет, {name}! Я ассистент компании ECO Стены. Помогу с подбором материалов и расчётом панелей. 😊",
     "Рад знакомству, {name}! Я здесь, чтобы помочь вам с продукцией ECO Стены и ответить на вопросы.",
     "Здравствуйте, {name}! Если планируете ремонт или обновление интерьера — давайте подберём материалы вместе.",
     "{name}, привет! Я подскажу по WPC панелям, профилям, каталогу и примерному расчёту под ваши размеры.",
@@ -213,7 +213,7 @@ SYSTEM_PROMPT = """
 
 ВАЖНО:
 — Никогда не проси у пользователя каталог, JSON, прайс или цены.
-— Если JSON каталога отсутствует, честно скажи, что точный расчёт доступен только при наличии каталога (который подгружает система),
+— Если JSON каталога отсутствует, честно скажи, что точный расчёт доступен только при наличии каталога (который подгружается система),
   и предложи связаться с менеджером.
 — Если клиент выбрал через кнопки конкретную панель, толщину и высоту — ОБЯЗАН использовать именно эту комбинацию.
 
@@ -221,7 +221,7 @@ SYSTEM_PROMPT = """
 — WPC повышенной плотности не бывает толщиной 5 мм.
 — WPC Бамбук угольный не бывает с защитным слоем.
 
-Если клиент выбрал несколько материалов, в запросе может быть список этих материалов — используй его и в расчёте, и в формулировках.
+Если клиент выбрал несколько материалов, в запросе может быть список этих материалов — используй его и в расчёте, и в формулировке….
 
 Также:
 — Если ранее уже была проанализирована планировка с размерами, обязательно используй эти данные.
@@ -247,7 +247,7 @@ app = Flask(__name__)
 tg_application = Application.builder().token(TG_BOT_TOKEN).build()
 
 # ============================
-#   КЛАВИАТУРЫ
+#   КЛАВИАТУРА
 # ============================
 
 def build_main_menu_keyboard() -> InlineKeyboardMarkup:
@@ -257,7 +257,7 @@ def build_main_menu_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("Получить каталоги", callback_data="main|catalogs")],
         [InlineKeyboardButton("Получить презентацию", callback_data="main|presentation")],
         [InlineKeyboardButton("Контактная информация", callback_data="main|contacts")],
-        [InlineKeyboardButton("Хочу стать партнером", callback_data="main|partner")],
+        [InlineKeyboardButton("Хочу стать партнёром", callback_data="main|partner")],
     ]
     if ADMIN_CHAT_ID:
         buttons.append([InlineKeyboardButton("Администрирование", callback_data="main|admin")])
@@ -361,7 +361,7 @@ def build_contacts_keyboard() -> InlineKeyboardMarkup:
 
 def build_admin_keyboard() -> InlineKeyboardMarkup:
     buttons = [
-        [InlineKeyboardButton("Статистика", callback_data="admin|stats")],
+        [InlineKeyboardButton("Сатистика", callback_data="admin|stats")],
         [InlineKeyboardButton("Рассылка", callback_data="admin|broadcast")],
     ]
     buttons += build_back_button("Назад")
@@ -670,7 +670,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Используйте кнопки меню для расчёта или напишите /start")
 
 # ============================
-#   PHOTO HANDLER (НОВЫЙ)
+#   PHOTO HANDLER (НОВИНКА)
 # ============================
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -717,7 +717,7 @@ def webhook():
         logger.info(f"Received update: {json.dumps(update_json, indent=2)[:200]}...")  # Log first 200 chars
         if update_json:
             update = Update.de_json(update_json, tg_application.bot)
-            asyncio.create_task(tg_application.process_update(update))  # Async process to not block
+            asyncio.run(tg_application.process_update(update))  # Wrap in asyncio.run()
             return jsonify({"ok": True})
         else:
             logger.warning("Empty update received")
