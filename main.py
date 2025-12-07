@@ -8,8 +8,7 @@ from datetime import datetime, timedelta, timezone
 import re
 import math
 import logging
-import threading  # Для thread-safety, хотя не обязательно здесь
-
+import threading  # Для thread-safety
 
 import requests
 from flask import Flask, request, jsonify
@@ -18,6 +17,19 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
+from telegram.error import TelegramError
+
+# Настройка логирования
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Persistent event loop for webhook processing
 _loop = None
@@ -28,19 +40,6 @@ def get_event_loop():
         _loop = asyncio.new_event_loop()
         asyncio.set_event_loop(_loop)
     return _loop
-
-from telegram.ext import (
-    Application,
-    CallbackQueryHandler,
-    CommandHandler,
-    ContextTypes,
-    MessageHandler,
-    filters,
-)
-
-# Настройка логирования
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # ============================
 #   НАСТРОЙКИ (через .env)
@@ -86,8 +85,11 @@ def load_stats():
                 return loaded
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             logger.warning(f"Corrupted stats file, starting fresh: {e}")
-            # Optionally remove corrupted file
-            os.remove(STATS_FILE)
+            # Optionally remove corrupted file with try-except
+            try:
+                os.remove(STATS_FILE)
+            except OSError as oe:
+                logger.warning(f"Could not remove stats file: {oe}")
     return default_stats
 
 def save_stats(stats):
@@ -200,7 +202,6 @@ WALL_PRODUCTS = {
         },
     },
 }
-
 
 PRODUCT_CODES = {
     "wpc_charcoal": "WPC Бамбук угольный",
@@ -640,6 +641,31 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = f"Новая заявка партнёра: {partner_data}"
         await context.bot.send_message(ADMIN_CHAT_ID, msg)
     # Add more for yes/no windows/doors
+    elif action == 'window':
+        if parts[1] == 'yes':
+            context.chat_data['phase'] = 'window_size'
+            await query.edit_message_text(f"Введите размеры окна (ширина x высота, в {context.chat_data['unit']}):")
+        else:
+            context.chat_data['phase'] = 'doors'
+            await query.edit_message_text("Есть двери? (Да/Нет)", reply_markup=build_yes_no_keyboard("door|yes", "door|no"))
+    elif action == 'door':
+        if parts[1] == 'yes':
+            context.chat_data['phase'] = 'door_size'
+            await query.edit_message_text(f"Введите размеры двери (ширина x высота, в {context.chat_data['unit']}):")
+        else:
+            # Proceed to calculation
+            items = context.chat_data['calc_items']
+            width = context.chat_data['wall_width_m']
+            height = context.chat_data['wall_height_m']
+            deduct = context.chat_data['deduct_area']
+            unit = context.chat_data['unit']
+            results = [calculate_item(item, width, height, deduct, unit) for item in items]
+            total_cost = sum(int(re.search(r'(\d+) ₽', res).group(1)) for res in results if re.search(r'(\d+) ₽', res))
+            text = "\n\n".join(results) + f"\n\nОбщая стоимость: {total_cost} ₽"
+            await query.edit_message_text(text)
+            # Reset calc
+            context.chat_data['phase'] = None
+            await context.bot.send_message(query.message.chat_id, "Расчёт завершён! Вернуться в меню?", reply_markup=build_main_menu_keyboard())
 
 # ============================
 #   MESSAGE HANDLER
@@ -690,10 +716,20 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("Неверный формат. Пример: 1.2 x 0.9")
         else:
             await update.message.reply_text("Неверный формат. Используйте 'ширина x высота'")
-    # Similar for doors
     elif phase == 'door_size':
-        # Similar logic for doors
-        pass
+        sizes = re.split(r'[xX]', text)
+        if len(sizes) == 2:
+            try:
+                w = parse_size(sizes[0].strip(), context.chat_data['unit'])
+                h = parse_size(sizes[1].strip(), context.chat_data['unit'])
+                area = w * h
+                context.chat_data['doors'].append(area)
+                context.chat_data['deduct_area'] += area
+                await update.message.reply_text("Дверь добавлена. Ещё дверь? (Да/Нет)", reply_markup=build_yes_no_keyboard("door|yes", "door|no"))
+            except:
+                await update.message.reply_text("Неверный формат. Пример: 1.2 x 0.9")
+        else:
+            await update.message.reply_text("Неверный формат. Используйте 'ширина x высота'")
     elif phase == 'broadcast':
         # Send to group
         await context.bot.send_message(TG_GROUP, text)
@@ -731,7 +767,6 @@ tg_application.add_handler(CallbackQueryHandler(callback_handler))
 tg_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
 tg_application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
-
 # ============================
 #   WEBHOOK SETUP WITH DEBUG
 # ============================
@@ -751,7 +786,6 @@ async def setup_webhook(application: Application, webhook_url: str):
     # Check webhook info
     info = await application.bot.get_webhook_info()
     logger.info(f"Webhook info: url={info.url}, pending_updates={info.pending_update_count}, last_error={info.last_error_date}")
-
 
 @app.route("/", methods=["GET"])
 def health():
@@ -773,7 +807,6 @@ def webhook():
     except Exception as e:
         logger.error(f"Error processing update: {e}")
         return jsonify({"ok": False, "error": str(e)}), 500
-
 
 # ============================
 #   MAIN
