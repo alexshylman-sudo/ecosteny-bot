@@ -731,6 +731,8 @@ def webhook():
 # ============================
 
 async def main():
+    await tg_application.initialize()
+    await tg_application.start()
     port = int(os.getenv("PORT", 8443))
     webhook_url = os.getenv("WEBHOOK_URL")
     if webhook_url:
