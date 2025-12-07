@@ -992,11 +992,11 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    data = query.data  # <-- Добавлено: Определение data (было пропущено!)
+    data = query.data  # Определение data
     
     logger.info(f"DEBUG: Callback received - data='{data}', user_id={query.from_user.id}")
     
-    # Парсинг data (единственный, без дубликатов)
+    # Парсинг data
     try:
         parts = data.split('|')
         prefix = parts[0] if len(parts) > 0 else None
@@ -1025,6 +1025,67 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=build_main_menu_keyboard()
                 )
             return  # Завершаем обработку после показа меню
+        
+        # Обработчик для "В главное меню" (main|back) — работает везде
+        if action == "back":
+            try:
+                logger.info("DEBUG: Returning to main menu")
+                await query.edit_message_text(
+                    "🏠 Главное меню ECO Стены. Выберите действие:",
+                    reply_markup=build_main_menu_keyboard()
+                )
+                # Сброс флагов расчёта
+                context.chat_data.pop("calc_mode", None)
+                context.chat_data.pop("calc_phase", None)
+                logger.info("DEBUG: Back to main successful")
+            except Exception as e:
+                logger.error(f"DEBUG: Error in back handler - {e}")
+                await query.message.reply_text("❌ Ошибка возврата. /menu", reply_markup=build_main_menu_keyboard())
+            return
+    
+    # Обработчики для категорий расчёта (calc_cat|...)
+    if prefix == "calc_cat":
+        if action == "walls":
+            try:
+                logger.info("DEBUG: Entering walls selection")
+                await query.edit_message_text(
+                    "🧱 Выберите тип стеновой панели WPC:",
+                    reply_markup=build_wall_product_keyboard()  # Ваша функция для продуктов WPC
+                )
+                context.chat_data["calc_phase"] = "select_product"
+                logger.info("DEBUG: Walls menu shown")
+            except Exception as e:
+                logger.error(f"DEBUG: Error in walls handler - {e}")
+                await query.edit_message_text("❌ Ошибка. Вернитесь в меню.", reply_markup=build_main_menu_keyboard())
+            return
+        
+        if action == "slats":
+            try:
+                logger.info("DEBUG: Entering slats selection")
+                await query.edit_message_text(
+                    "🔲 Выберите тип реечной панели:",
+                    reply_markup=build_slat_type_keyboard()  # Добавьте функцию, если нет
+                )
+                context.chat_data["calc_phase"] = "select_slat"
+                logger.info("DEBUG: Slats menu shown")
+            except Exception as e:
+                logger.error(f"DEBUG: Error in slats handler - {e}")
+                await query.edit_message_text("❌ Ошибка. Вернитесь в меню.", reply_markup=build_main_menu_keyboard())
+            return
+        
+        if action == "3d":
+            try:
+                logger.info("DEBUG: Entering 3D panels selection")
+                await query.edit_message_text(
+                    "🎨 Выберите тип 3D-панели:",
+                    reply_markup=build_3d_panel_keyboard()  # Добавьте функцию, если нет
+                )
+                context.chat_data["calc_phase"] = "select_3d"
+                logger.info("DEBUG: 3D menu shown")
+            except Exception as e:
+                logger.error(f"DEBUG: Error in 3d handler - {e}")
+                await query.edit_message_text("❌ Ошибка. Вернитесь в меню.", reply_markup=build_main_menu_keyboard())
+            return
     
 
     # ДЕЙСТВИЯ ПОСЛЕ РАСЧЁТА
