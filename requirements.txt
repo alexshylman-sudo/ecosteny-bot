@@ -1,6 +1,5 @@
 python-telegram-bot[webhooks]==20.7
-quart==0.19.6  # Замена Flask на async-версию
+quart==0.20.0  # Updated to fix the KeyError
 requests==2.32.3
 python-dotenv==1.0.1
-gunicorn==22.0.0  # Обновите для лучшей совместимости, но для Quart используйте hypercorn вместо gunicorn
-hypercorn==0.17.3  # ASGI-сервер для Quart (замена Gunicorn)
+hypercorn==0.17.3  # ASGI server for Quart (replaces Gunicorn)
