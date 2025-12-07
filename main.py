@@ -720,13 +720,21 @@ tg_application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 # ============================
 
 async def setup_webhook(application: Application, webhook_url: str):
+    # Сначала удаляем старый webhook, чтобы очистить last_error
+    try:
+        await application.bot.delete_webhook(drop_pending_updates=True)
+        logger.info("Old webhook deleted, pending updates dropped.")
+    except TelegramError as e:
+        logger.warning(f"Failed to delete old webhook: {e} (may not exist)")
+
     webhook_path = f"{webhook_url}/{TG_BOT_TOKEN}"
     await application.bot.set_webhook(url=webhook_path)
-    logger.info(f"Webhook set to: {webhook_path}")
+    logger.info(f"New webhook set to: {webhook_path}")
 
     # Check webhook info
     info = await application.bot.get_webhook_info()
     logger.info(f"Webhook info: url={info.url}, pending_updates={info.pending_update_count}, last_error={info.last_error_date}")
+
 
 @app.route("/", methods=["GET"])
 def health():
