@@ -2167,6 +2167,9 @@ def setup_webhook():
     loop.run_until_complete(async_setup())
 
 if __name__ == "__main__":
-    setup_webhook()
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
+    setup_webhook()  # Your existing setup (runs async_setup)
+    from hypercorn.asyncio import serve
+    from hypercorn.config import Config
+    config = Config()
+    config.bind = [f"0.0.0.0:{port}"]
+    asyncio.run(serve(app, config))
