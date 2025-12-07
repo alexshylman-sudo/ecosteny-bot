@@ -40,8 +40,9 @@ print("### python-telegram-bot VERSION ON RENDER:", TG_VER)
 # ---- РЕШЕНИЕ ПРОБЛЕМЫ С ПОРТОМ ----
 # Render передаёт порт через переменную окружения PORT.
 # Если её нет — ставим fallback 10000.
-PORT = int(os.environ.get("PORT", 10000))
-
+# Определяем переменную 'port' для совместимости с кодом (если в нём используется lowercase)
+port = int(os.environ.get("PORT", 10000))
+PORT = port  # Для consistency, если где-то используется uppercase
 
 # ============================
 #   НАСТРОЙКИ (через .env)
