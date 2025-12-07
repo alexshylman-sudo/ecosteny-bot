@@ -679,8 +679,6 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await handle_smalltalk(update, context)
 
-# Add photo handler as in example
-
 # For stats: on start, add user
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stats = load_stats()
@@ -696,6 +694,185 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # On calc complete, increment calc_count
 
+def get_calc_selection_block(context: ContextTypes.DEFAULT_TYPE) -> str:
+    items = context.chat_data.get("calc_items", [])
+    if not items:
+        return ""
+    lines = ["Клиент выбрал следующие материалы для расчёта:"]
+    for idx, it in enumerate(items, start=1):
+        cat = it.get("category")
+        custom = it.get("custom_name")
+        if cat == "walls":
+            base_title = PRODUCT_CODES.get(it["product_code"], it["product_code"])
+            title = base_title + (f" (название клиента: {custom})" if custom else "")
+            lines.append(f"{idx}. Стеновые панели — {title}, {it['thickness']} мм, высота {it['length']} мм")
+        elif cat == "slats":
+            base = it.get("type")
+            base_title = "WPC реечная панель" if base == "wpc" else "Деревянная панель"
+            title = base_title + (f" (название клиента: {custom})" if custom else "")
+            lines.append(f"{idx}. Реечные панели — {title}")
+        elif cat == "3d":
+            vcode = it.get("var")
+            size = "600×1200 мм" if vcode == "var1" else "1200×3000 мм"
+            base_title = f"3D панели {size}"
+            title = base_title + (f" (название клиента: {custom})" if custom else "")
+            lines.append(f"{idx}. {title}")
+        else:
+            title = custom or (cat or "Неизвестный материал")
+            lines.append(f"{idx}. {title}")
+    lines.append("")
+    return "\n".join(lines)
+
+# ============================
+#   ОБРАБОТКА ФОТО
+# ============================
+
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not OPENAI_API_KEY:
+        await update.message.reply_text(
+            "Сейчас я не могу обработать чертёж через модель (нет ключа OpenAI), "
+            "но вы можете прислать размеры текстом, и я помогу с расчётом."
+        )
+        return
+
+    photos = update.message.photo
+    caption = update.message.caption or ""
+
+    if not photos:
+        await update.message.reply_text("Не получилось получить изображение. Пришлите, пожалуйста, фото ещё раз.")
+        return
+
+    photo = photos[-1]
+    file = await photo.get_file()
+    bio = BytesIO()
+    await file.download_to_memory(out=bio)
+    img_bytes = bio.getvalue()
+    img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+
+    catalog_json = json.dumps(WALL_PRODUCTS, ensure_ascii=False)
+    selection_block = get_calc_selection_block(context)
+
+    style_block = (
+        "Формат ответа:\n"
+        "— НЕ используй таблицы и символы `|`.\n"
+        "— Оформи ответ блоками с заголовками, списками и эмодзи.\n\n"
+    )
+
+    header = (
+        "Пользователь прислал фото планировки или развертки (чертёж/схема) помещения.\n"
+        "Нужно считать видимые размеры стен и оценить площадь.\n\n"
+    )
+
+    extra_sizes = (
+        "Дополнительно о материалах:\n"
+        f"• Реечные панели: 168 × 2900 × 18 мм. WPC — {SLAT_PRICES['wpc']} ₽, дерево — {SLAT_PRICES['wood']} ₽.\n"
+        f"• 3D панели 600×1200 мм — {PANELS_3D['var1']['price_rub']} ₽/шт.\n"
+        f"• 3D панели 1200×3000 мм — {PANELS_3D['var2']['price_rub']} ₽/шт.\n\n"
+    )
+
+    user_instruction = (
+        style_block
+        + header
+        + f"{selection_block}"
+        + "Ниже передан JSON с каталогом стеновых панелей WPC (размеры и цены). "
+          "Используй ТОЛЬКО его для расчётов по стеновым панелям и не проси у пользователя прайс или JSON.\n\n"
+        f"{catalog_json}\n\n"
+        f"{extra_sizes}"
+        "Задача:\n"
+        "1) Считать размеры по изображению и оценить площадь стен.\n"
+        "2) Если клиент уже выбрал материалы (по списку выше), посчитать примерный расход и стоимость.\n"
+        "3) ОБЯЗАТЕЛЬНО для каждой категории показать ОТХОДЫ: сколько панели идёт в подрезку/резерв и какой процент отходов.\n"
+        "4) Если данных не хватает — сделай разумные допущения и явно их озвучь.\n"
+        f"Подпись к изображению (если есть): {caption}"
+    )
+
+    payload = {
+        "model": "gpt-4o",  # Исправлено
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": [
+                {"type": "text", "text": user_instruction},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
+            ]},
+        ],
+        "temperature": 0.2,
+    }
+
+    try:
+        resp = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=60,
+        )
+        print("PHOTO RAW RESPONSE:", resp.text)
+        resp.raise_for_status()
+        data = resp.json()
+        answer = data["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        print("PHOTO ERROR:", repr(e))
+        answer = (
+            "Сейчас не получается автоматически обработать фото планировки/развертки. "
+            "Пришлите, пожалуйста, размеры стен текстом, и я помогу с расчётом."
+        )
+
+    warning = (
+        "<b>Внимание: расчёт, выполненный ботом-калькулятором, не является окончательным.\n"
+        "Для точного подбора материалов и окончательного просчёта обязательно свяжитесь с менеджером ECO Стены.</b>\n\n"
+    )
+    full_answer = warning + answer
+
+    await update.message.reply_text(full_answer, parse_mode="HTML")
+    context.chat_data["plan_description"] = answer
+
+# ============================
+#   SMALLTALK
+# ============================
+
+async def handle_smalltalk(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_text = update.message.text or ""
+    if not OPENAI_API_KEY:
+        await update.message.reply_text(
+            "Сейчас я не могу обратиться к модели, но могу подсказать по продукции ECO Стены. "
+            "Спросите, например, про WPC панели, рейки или 3D панели."
+        )
+        return
+
+    history = context.chat_data.get("chat_history", [])
+    messages = [{"role": "system", "content": CHAT_SYSTEM_PROMPT}]
+    if history:
+        messages.extend(history[-10:])
+    messages.append({"role": "user", "content": user_text})
+
+    payload = {
+        "model": "gpt-4o-mini",  # Исправлено
+        "messages": messages,
+        "temperature": 0.5,
+    }
+
+    try:
+        resp = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=30,
+        )
+        print("SMALLTALK RAW RESPONSE:", resp.text)
+        resp.raise_for_status()
+        data = resp.json()
+        answer = data["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        print("SMALLTALK ERROR:", repr(e))
+        answer = (
+            "Сейчас у меня не получается обратиться к модели, "
+            "но я всё равно могу подсказать по нашим материалам — задайте вопрос про панели или интерьер."
+        )
+
+    await update.message.reply_text(answer)
+    history.append({"role": "user", "content": user_text})
+    history.append({"role": "assistant", "content": answer})
+    context.chat_data["chat_history"] = history[-20:]
+
 # ============================
 #   REGISTRATION
 # ============================
@@ -703,7 +880,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 tg_application.add_handler(CommandHandler("start", start))
 tg_application.add_handler(CallbackQueryHandler(callback_handler))
 tg_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
-tg_application.add_handler(MessageHandler(filters.PHOTO, handle_photo))  # Define handle_photo as in example
+tg_application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
 # Webhook as in example
 
