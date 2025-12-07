@@ -8,38 +8,41 @@ from datetime import datetime, timedelta, timezone
 import re
 import math
 import logging
-import threading  # Для thread-safety
+import traceback
+import sys  # For flush
 
 import requests
 from flask import Flask, request, jsonify
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-)
-from telegram.ext import (
-    Application,
-    CallbackQueryHandler,
-    CommandHandler,
-    ContextTypes,
-    MessageHandler,
-    filters,
-)
-from telegram.error import TelegramError
+try:
+    from telegram import (
+        Update,
+        InlineKeyboardButton,
+        InlineKeyboardMarkup,
+    )
+    from telegram.ext import (
+        Application,
+        CallbackQueryHandler,
+        CommandHandler,
+        ContextTypes,
+        MessageHandler,
+        filters,
+    )
+    from telegram.error import TelegramError
+    print("Telegram imports successful", flush=True)
+except ImportError as e:
+    print(f"Import error: {e}", flush=True)
+    raise
 
-# Настройка логирования
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+# Настройка логирования (DEBUG + flush для Render)
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.DEBUG,
+    stream=sys.stdout,
+    force=True  # Override if needed
+)
 logger = logging.getLogger(__name__)
 
-# Persistent event loop for webhook processing
-_loop = None
-
-def get_event_loop():
-    global _loop
-    if _loop is None or _loop.is_closed():
-        _loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(_loop)
-    return _loop
+print("Starting app...", flush=True)
 
 # ============================
 #   НАСТРОЙКИ (через .env)
@@ -49,14 +52,27 @@ TG_BOT_TOKEN = os.getenv("TG_BOT_TOKEN")
 if not TG_BOT_TOKEN:
     raise ValueError("Установите TG_BOT_TOKEN в .env!")
 
+# Test token early
+try:
+    bot_info = requests.get(f"https://api.telegram.org/bot{TG_BOT_TOKEN}/getMe").json()
+    if not bot_info.get("ok"):
+        raise ValueError(f"Invalid token: {bot_info}")
+    print(f"Bot token valid: {bot_info['result']['username']}", flush=True)
+except Exception as e:
+    print(f"Token test failed: {e}", flush=True)
+    raise
+
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-ADMIN_CHAT_ID = 203473623  # ИЗ ответа пользователя
+if not OPENAI_API_KEY:
+    logger.warning("OPENAI_API_KEY not set — chat features limited")
+
+ADMIN_CHAT_ID = 203473623
 
 WELCOME_PHOTO_URL = "https://ecosteni.ru/wp-content/uploads/2025/11/qncccaze.jpg"
 PRESENTATION_URL = "https://ecosteni.ru/wp-content/uploads/2025/11/ecosteny_prezentacziya.pdf"
 TG_GROUP = "@ecosteni"
 
-PHONE_NUMBER = "+79780223222"  # Fixed phone number without spaces
+PHONE_NUMBER = "+79780223222"
 
 GREETING_PHRASES = [
     "Привет, {name}! Я ассистент компании ECO Стены. Помогу с подбором материалов и расчётом панелей. 😊",
@@ -66,9 +82,8 @@ GREETING_PHRASES = [
     "Добро пожаловать, {name}! Рассказывайте, какой у вас объект — подберём оптимальное решение из наших материалов.",
 ]
 
-# Файл для хранения статистики (на Render - ephemeral, но для простоты)
 STATS_FILE = "/tmp/eco_stats.json"
-USER_DATA_FILE = "/tmp/user_data.json"  # New file for user preferences and states
+USER_DATA_FILE = "/tmp/user_data.json"
 
 def load_stats():
     default_stats = {
@@ -82,21 +97,18 @@ def load_stats():
         try:
             with open(STATS_FILE, 'r') as f:
                 loaded = json.load(f)
-                # Convert lists back to sets
                 loaded['users'] = set(loaded.get('users', []))
                 loaded['users_today'] = set(loaded.get('users_today', []))
                 return loaded
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             logger.warning(f"Corrupted stats file, starting fresh: {e}")
-            # Optionally remove corrupted file with try-except
             try:
                 os.remove(STATS_FILE)
-            except OSError as oe:
-                logger.warning(f"Could not remove stats file: {oe}")
+            except OSError:
+                pass
     return default_stats
 
 def save_stats(stats):
-    # Convert sets to lists for JSON
     serializable = {
         "users": list(stats['users']),
         "calc_count": stats['calc_count'],
@@ -119,8 +131,8 @@ def load_user_data():
             logger.warning(f"Corrupted user data file, starting fresh: {e}")
             try:
                 os.remove(USER_DATA_FILE)
-            except OSError as oe:
-                logger.warning(f"Could not remove user data file: {oe}")
+            except OSError:
+                pass
     return {}
 
 def save_user_data(user_data):
@@ -130,7 +142,6 @@ def save_user_data(user_data):
     except Exception as e:
         logger.error(f"Failed to save user data: {e}")
 
-# Function to get/set user unit preference
 def get_user_unit(user_id):
     user_data = load_user_data()
     return user_data.get(str(user_id), {}).get('unit', None)
@@ -142,7 +153,6 @@ def set_user_unit(user_id, unit):
     user_data[str(user_id)]['unit'] = unit
     save_user_data(user_data)
 
-# Function to get/set user state (for input flows)
 def get_user_state(user_id):
     user_data = load_user_data()
     return user_data.get(str(user_id), {}).get('state', None)
@@ -163,11 +173,9 @@ def set_user_state(user_id, state, data=None):
 def clear_user_state(user_id):
     user_data = load_user_data()
     if str(user_id) in user_data:
-        if 'state' in user_data[str(user_id)]:
-            del user_data[str(user_id)]['state']
-        if 'state_data' in user_data[str(user_id)]:
-            del user_data[str(user_id)]['state_data']
-        if not user_data[str(user_id)]:  # If empty, remove user
+        user_data[str(user_id)].pop('state', None)
+        user_data[str(user_id)].pop('state_data', None)
+        if not user_data[str(user_id)]:
             del user_data[str(user_id)]
     save_user_data(user_data)
 
@@ -256,8 +264,8 @@ WALL_PRODUCTS = {
             },
         },
     },
-    "SPC Панель": {  # Без толщины
-        0: {  # Dummy thickness
+    "SPC Панель": {
+        0: {
             "width_mm": 1220,
             "panels": {
                 2440: {"area_m2": 2.928, "price_rub": 9500},
@@ -296,7 +304,7 @@ PROFILES = {
 }
 
 SLAT_PRICES = {
-    "wpc": 1200,  # руб./м.п.
+    "wpc": 1200,
     "wood": 1500,
 }
 
@@ -344,10 +352,39 @@ CHAT_SYSTEM_PROMPT = """
 
 app = Flask(__name__)
 
-tg_application = Application.builder().token(TG_BOT_TOKEN).build()
+tg_application = None
+
+def init_tg_app():
+    global tg_application
+    if tg_application is None:
+        logger.debug("Initializing Telegram app...")
+        print("Step 0: Init app", flush=True)
+        try:
+            tg_application = Application.builder().token(TG_BOT_TOKEN).build()
+            print("Step 0.1: Application built", flush=True)
+
+            # Add handlers
+            tg_application.add_handler(CommandHandler("start", start))
+            tg_application.add_handler(CallbackQueryHandler(main_menu_callback, pattern="main\|menu"))
+            tg_application.add_handler(CallbackQueryHandler(contacts_callback, pattern="main\|contacts"))
+            tg_application.add_handler(CallbackQueryHandler(calc_callback, pattern="main\|calc"))
+            tg_application.add_handler(CallbackQueryHandler(unit_callback, pattern="unit\|.*"))
+            tg_application.add_handler(CallbackQueryHandler(partner_callback, pattern="main\|partner"))
+            tg_application.add_handler(CallbackQueryHandler(info_callback, pattern="main\|info"))
+            tg_application.add_handler(CallbackQueryHandler(catalogs_callback, pattern="main\|catalogs"))
+            tg_application.add_handler(CallbackQueryHandler(presentation_callback, pattern="main\|presentation"))
+            tg_application.add_handler(CallbackQueryHandler(wall_calc_callback, pattern="calc\|wall"))
+            tg_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
+            print("Step 0.2: Handlers added", flush=True)
+            logger.info("Telegram app initialized successfully")
+        except Exception as e:
+            error_msg = f"Failed to init tg_app: {e}\n{traceback.format_exc()}"
+            logger.error(error_msg)
+            print(error_msg, flush=True)
+            raise
 
 # ============================
-#   КЛАВИАТУРА
+#   КЛАВИАТУРЫ
 # ============================
 
 def build_main_menu_keyboard() -> InlineKeyboardMarkup:
@@ -383,24 +420,32 @@ def build_unit_keyboard() -> InlineKeyboardMarkup:
 # ============================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    print("Step 4: start handler", flush=True)
     user = update.effective_user
     stats = load_stats()
     stats['users'].add(user.id)
     stats['users_today'].add(user.id)
     save_stats(stats)
 
-    # Send welcome photo
-    await context.bot.send_photo(
-        chat_id=update.effective_chat.id,
-        photo=WELCOME_PHOTO_URL,
-        caption=random.choice(GREETING_PHRASES).format(name=user.first_name or "друг"),
-        reply_markup=build_main_menu_keyboard(),
-    )
+    try:
+        await context.bot.send_photo(
+            chat_id=update.effective_chat.id,
+            photo=WELCOME_PHOTO_URL,
+            caption=random.choice(GREETING_PHRASES).format(name=user.first_name or "друг"),
+            reply_markup=build_main_menu_keyboard(),
+        )
+        print("Step 4.1: Photo sent", flush=True)
+    except Exception as e:
+        logger.error(f"Send photo failed: {e}")
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=random.choice(GREETING_PHRASES).format(name=user.first_name or "друг") + "\n(Фото недоступно)",
+            reply_markup=build_main_menu_keyboard(),
+        )
 
 async def handle_partner_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
     name = update.message.text.strip()
-    # Save name or something (e.g., send to admin)
     try:
         await context.bot.send_message(ADMIN_CHAT_ID, f"Новый партнёр: {name} (ID: {user_id})")
     except TelegramError:
@@ -414,13 +459,11 @@ async def handle_partner_name(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def contacts_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
-
     contact_keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("📞 Позвонить", url=f"tel:{PHONE_NUMBER}")],
         [InlineKeyboardButton("💬 Написать в Telegram", url=f"https://t.me/{TG_GROUP.replace('@', '')}")],
         [InlineKeyboardButton("⬅️ Назад", callback_data="main|menu")],
     ])
-
     await query.edit_message_text(
         "📞 Контактная информация:\n"
         "Телефон: +7 (978) 022-32-22\n"
@@ -461,7 +504,6 @@ async def partner_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     )
     set_user_state(query.from_user.id, "partner_name")
 
-# Placeholder for other callbacks (info, catalogs, presentation) - expand as needed
 async def info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
@@ -489,7 +531,6 @@ async def presentation_callback(update: Update, context: ContextTypes.DEFAULT_TY
         ])
     )
 
-# Example for wall calc start - integrate unit and state
 async def wall_calc_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
@@ -498,12 +539,11 @@ async def wall_calc_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not unit:
         await query.edit_message_text("Сначала выберите единицу измерения:", reply_markup=build_unit_keyboard())
         return
-    # Start dimension input, e.g., total area or rooms
     await query.edit_message_text(f"Введите общую площадь стен (в {unit}):")
     set_user_state(user_id, "wall_area")
 
-# Message handler for inputs (dimensions, partner name, etc.)
 async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    print("Step 5: text input handler", flush=True)
     user_id = update.effective_user.id
     text = update.message.text.strip()
     state = get_user_state(user_id)
@@ -514,7 +554,6 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return
 
     if not state:
-        # Fallback: echo or forward to admin
         await update.message.reply_text("Используйте меню для навигации!")
         return
 
@@ -522,7 +561,6 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     try:
         value = float(text)
         if state == "wall_area":
-            # Process area, then ask for windows/doors
             set_user_state(user_id, "windows_count", {"area": value})
             await update.message.reply_text(f"Площадь: {value} {unit}. Сколько окон?")
         elif state == "windows_count":
@@ -542,43 +580,24 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             item_type = state.replace("_height", "")
             data = state_data.copy()
             data["height"] = value
-            # Process full item, e.g., subtract area: area_m2 = (width * height / 1000000 if mm else width*height)
             conv = 1000000 if unit == "мм" else 1
             subtract = (data["width"] * value) / conv
-            # Assume total area in data["area"]
             net_area = data.get("area", 0) - subtract
             clear_user_state(user_id)
             await update.message.reply_text(f"Размеры обработаны. Чистая площадь: {net_area:.2f} м². Теперь расчёт панелей...")
-            # Here integrate catalog calc using WALL_PRODUCTS, increment stats['calc_count'] etc.
             stats = load_stats()
             stats['calc_count'] += 1
             stats['calc_today'] += 1
             save_stats(stats)
-            # Send calc result (placeholder)
             await update.message.reply_text("Расчёт: Нужно 10 панелей по 10500 руб. Итого: 105000 руб.", reply_markup=build_main_menu_keyboard())
-        # Add more states as needed
+        print("Step 5.1: Input processed", flush=True)
     except ValueError:
         await update.message.reply_text(f"Пожалуйста, введите числовое значение (в {unit}).")
 
-# Callback for main menu return
 async def main_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
     await query.edit_message_text("Главное меню:", reply_markup=build_main_menu_keyboard())
-
-# Add all handlers
-tg_application.add_handler(CommandHandler("start", start))
-tg_application.add_handler(CallbackQueryHandler(main_menu_callback, pattern="main\|menu"))
-tg_application.add_handler(CallbackQueryHandler(contacts_callback, pattern="main\|contacts"))
-tg_application.add_handler(CallbackQueryHandler(calc_callback, pattern="main\|calc"))
-tg_application.add_handler(CallbackQueryHandler(unit_callback, pattern="unit\|.*"))
-tg_application.add_handler(CallbackQueryHandler(partner_callback, pattern="main\|partner"))
-tg_application.add_handler(CallbackQueryHandler(info_callback, pattern="main\|info"))
-tg_application.add_handler(CallbackQueryHandler(catalogs_callback, pattern="main\|catalogs"))
-tg_application.add_handler(CallbackQueryHandler(presentation_callback, pattern="main\|presentation"))
-tg_application.add_handler(CallbackQueryHandler(wall_calc_callback, pattern="calc\|wall"))  # Example for wall
-# Add more for slat, 3d, profile similarly
-tg_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
 
 # ============================
 #   WEBHOOK
@@ -586,11 +605,45 @@ tg_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handl
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    loop = get_event_loop()
-    update = Update.de_json(request.get_json(), tg_application.bot)
-    loop.run_until_complete(tg_application.process_update(update))
-    return jsonify({'status': 'ok'})
+    logger.debug("Webhook POST received")
+    print("Step 1: Webhook called", flush=True)
+    try:
+        init_tg_app()
+        print("Step 2: App inited", flush=True)
+        json_data = request.get_json()
+        print(f"Step 3: JSON received: {json_data}", flush=True)
+        if not json_data:
+            logger.warning("Empty JSON")
+            return jsonify({'status': 'ok'}), 200
+
+        update = Update.de_json(json_data, tg_application.bot)
+        print("Step 3.1: Update parsed", flush=True)
+        if not update:
+            logger.error("Failed to parse Update")
+            return jsonify({'status': 'ok'}), 200
+
+        asyncio.run(tg_application.process_update(update))
+        print("Step 4: Update processed", flush=True)
+        return jsonify({'status': 'ok'}), 200
+    except Exception as e:
+        error_msg = f"Webhook error: {e}\n{traceback.format_exc()}"
+        logger.error(error_msg)
+        print(error_msg, flush=True)
+        return jsonify({'status': 'error', 'details': str(e)}), 200  # Always 200
+
+@app.route('/', methods=['GET'])
+def health():
+    try:
+        init_tg_app()
+        ready = tg_application is not None
+        print(f"Health check: ready={ready}", flush=True)
+        return jsonify({'status': 'ok', 'bot_ready': ready}), 200
+    except Exception as e:
+        print(f"Health error: {e}", flush=True)
+        return jsonify({'status': 'error', 'bot_ready': False}), 500
 
 if __name__ == '__main__':
+    logger.info("Flask app starting...")
+    print("Flask starting...", flush=True)
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
