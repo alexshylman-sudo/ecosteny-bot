@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import re  # Добавлено для парсинга размеров
 
 import requests
-from flask import Flask, request, jsonify
+from quart import Quart, request, jsonify
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -205,7 +205,7 @@ CHAT_SYSTEM_PROMPT = """
 #   FLASK + TELEGRAM
 # ============================
 
-app = Flask(__name__)
+app = Quart(__name__)
 
 # Создаём приложение Telegram
 tg_application = Application.builder().token(TG_BOT_TOKEN).build()
@@ -2138,24 +2138,15 @@ def index():
     return "ECO Стены бот работает!"
 
 @app.route(f"/{TG_BOT_TOKEN}", methods=["POST"])
-def telegram_webhook():
+async def telegram_webhook():
     try:
-        update_json = request.get_json(force=True)
+        update_json = await request.get_json()
         if not update_json:
             return jsonify({"status": "no update"}), 200
 
         update = Update.de_json(update_json, tg_application.bot)
-
-        # Выполняем асинхронную обработку
-        try:
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(tg_application.process_update(update))
-        except Exception as proc_exc:
-            logger.exception("Error while processing update: %s", proc_exc)
-            return jsonify({"status": "error", "detail": str(proc_exc)}), 500
-
+        await tg_application.process_update(update)
         return jsonify({"status": "ok"}), 200
-
     except Exception as e:
         logger.exception("Webhook error: %s", e)
         return jsonify({"status": "error", "detail": str(e)}), 500
