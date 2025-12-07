@@ -1009,7 +1009,7 @@ if prefix == "main":
     if action == "calc":
         try:
             logger.info("DEBUG: Entering calc mode")
-            await query.edit_message_text(
+            await query.edit_message_text(  # <-- Теперь await внутри async def и if
                 "🧮 Выберите категорию материалов для расчёта:",
                 reply_markup=build_calc_category_keyboard()
             )
@@ -1019,10 +1019,7 @@ if prefix == "main":
         except Exception as e:
             logger.error(f"DEBUG: Error in calc handler - {e}")
             await query.edit_message_text("❌ Ошибка при запуске расчёта. Попробуйте /menu.", reply_markup=build_main_menu_keyboard())
-        return  # <-- Этот return теперь внутри if и функции
-
-# ... (остальной код handle_callback, с отступами на уровне if выше)
-
+        return  # <-- return тоже внутри if
 
     # ДЕЙСТВИЯ ПОСЛЕ РАСЧЁТА
     if action == "after_calc" and len(parts) >= 2:
