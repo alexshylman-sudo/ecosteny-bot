@@ -8,6 +8,8 @@ from datetime import datetime, timedelta, timezone
 import re
 import math
 import logging
+import threading  # Для thread-safety, хотя не обязательно здесь
+
 
 import requests
 from flask import Flask, request, jsonify
@@ -16,6 +18,17 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
+
+# Persistent event loop for webhook processing
+_loop = None
+
+def get_event_loop():
+    global _loop
+    if _loop is None or _loop.is_closed():
+        _loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(_loop)
+    return _loop
+
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -710,10 +723,14 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 #   REGISTRATION
 # ============================
 
+# Initialize application once at startup (sync)
+asyncio.run(tg_application.initialize())
+
 tg_application.add_handler(CommandHandler("start", start))
 tg_application.add_handler(CallbackQueryHandler(callback_handler))
 tg_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
 tg_application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+
 
 # ============================
 #   WEBHOOK SETUP WITH DEBUG
@@ -744,10 +761,11 @@ def health():
 def webhook():
     try:
         update_json = request.get_json()
-        logger.info(f"Received update: {json.dumps(update_json, indent=2)[:200]}...")  # Log first 200 chars
+        logger.info(f"Received update: {json.dumps(update_json, indent=2)[:200]}...")
         if update_json:
             update = Update.de_json(update_json, tg_application.bot)
-            asyncio.run(tg_application.process_update(update))  # Wrap in asyncio.run()
+            loop = get_event_loop()
+            loop.run_until_complete(tg_application.process_update(update))
             return jsonify({"ok": True})
         else:
             logger.warning("Empty update received")
@@ -756,21 +774,23 @@ def webhook():
         logger.error(f"Error processing update: {e}")
         return jsonify({"ok": False, "error": str(e)}), 500
 
+
 # ============================
 #   MAIN
 # ============================
 
-async def main():
-    await tg_application.initialize()
-    await tg_application.start()
+def main():
     port = int(os.getenv("PORT", 8443))
     webhook_url = os.getenv("WEBHOOK_URL")
     if webhook_url:
-        await setup_webhook(tg_application, webhook_url)
+        # Setup webhook in async context
+        loop = get_event_loop()
+        loop.run_until_complete(setup_webhook(tg_application, webhook_url))
+        logger.info("Starting Flask server with webhook mode")
         app.run(host="0.0.0.0", port=port, debug=False)
     else:
         logger.info("No WEBHOOK_URL, starting polling")
-        await tg_application.run_polling()
+        asyncio.run(tg_application.run_polling())
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
