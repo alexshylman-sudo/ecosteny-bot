@@ -297,7 +297,6 @@ def build_main_menu_keyboard() -> InlineKeyboardMarkup:
     ]
     if ADMIN_CHAT_ID:
         buttons.append([InlineKeyboardButton("Администрирование", callback_data="main|admin")])
-    buttons.append([InlineKeyboardButton("Поделиться", callback_data="share")])
     return InlineKeyboardMarkup(buttons)
 
 def build_back_button(text="Назад"):
@@ -367,10 +366,17 @@ def build_3d_size_keyboard() -> InlineKeyboardMarkup:
     buttons += build_back_button("Назад")
     return InlineKeyboardMarkup(buttons)
 
-def build_add_more_keyboard() -> InlineKeyboardMarkup:
+def build_add_another_keyboard() -> InlineKeyboardMarkup:
     buttons = [
-        [InlineKeyboardButton("Да, добавить ещё", callback_data="add_more|yes")],
-        [InlineKeyboardButton("Нет, продолжить расчёт", callback_data="add_more|no")],
+        [InlineKeyboardButton("Да, добавить ещё материал", callback_data="add_another|yes")],
+        [InlineKeyboardButton("Расчёт окончен", callback_data="add_another|no")],
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+def build_custom_name_keyboard() -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton("Да, знаю название/артикул", callback_data="custom_name|yes")],
+        [InlineKeyboardButton("Нет, стандартный", callback_data="custom_name|no")],
     ]
     return InlineKeyboardMarkup(buttons)
 
@@ -390,7 +396,10 @@ def build_yes_no_keyboard(yes_data, no_data) -> InlineKeyboardMarkup:
 
 def build_contacts_keyboard() -> InlineKeyboardMarkup:
     buttons = [
-        [InlineKeyboardButton("Написать в Telegram", url=f"https://t.me/{TG_GROUP}")],
+        [InlineKeyboardButton("Группа в Telegram", url="https://t.me/ecosteni")],
+        [InlineKeyboardButton("Связаться с администратором", url="https://t.me/DService82")],
+        [InlineKeyboardButton("Сайт", url="https://ecosteni.ru/")],
+        [InlineKeyboardButton("Позвонить", url="tel:+79780223222")],
     ]
     buttons += build_back_button("Назад")
     return InlineKeyboardMarkup(buttons)
@@ -401,6 +410,15 @@ def build_admin_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("Рассылка", callback_data="admin|broadcast")],
     ]
     buttons += build_back_button("Назад")
+    return InlineKeyboardMarkup(buttons)
+
+def build_partner_role_keyboard() -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton("Розничный магазин", callback_data="partner_role|retail")],
+        [InlineKeyboardButton("Монтажная бригада", callback_data="partner_role|installer")],
+        [InlineKeyboardButton("Дизайнер/Архитектор", callback_data="partner_role|designer")],
+        [InlineKeyboardButton("Другое", callback_data="partner_role|other")],
+    ]
     return InlineKeyboardMarkup(buttons)
 
 async def send_greeting(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -438,8 +456,9 @@ def parse_size(text: str, unit: str) -> float:
     except:
         return 0.0
 
-def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit):
+def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit) -> tuple[str, int]:
     category = item['category']
+    cost = 0
     if category in ['walls', 'spc']:
         title = PRODUCT_CODES[item['product_code']]
         thickness = item.get('thickness', 0)
@@ -454,7 +473,7 @@ def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit):
         waste_area = total_area - net_area
         waste_pct = (waste_area / total_area) * 100 if total_area > 0 else 0
         cost = panels * price
-        return f"""
+        result_text = f"""
 Выбранный материал: {title}
 Толщина: {thickness} мм (если применимо)
 Высота: {length_mm} мм
@@ -469,19 +488,17 @@ def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit):
 📏 Отходы: {waste_area:.2f} м² ({waste_pct:.2f}%)
 💰 Стоимость: {cost} ₽
 """
-
     elif category == 'profiles':
         thickness = item['thickness']
         type_name = item['type']
         quantity = item['quantity']
         price = PROFILES[thickness][type_name]
         cost = quantity * price
-        return f"""
+        result_text = f"""
 Профиль: {type_name}, {thickness} мм
 Количество: {quantity} шт.
 💰 Стоимость: {cost} ₽
 """
-
     elif category == 'slats':
         type_name = 'WPC' if item['type'] == 'wpc' else 'Деревянные'
         price_mp = SLAT_PRICES[item['type']]
@@ -489,14 +506,13 @@ def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit):
         required = length_m * 1.1
         cost = math.ceil(required) * price_mp  # Округление вверх
         waste = required - length_m
-        return f"""
+        result_text = f"""
 Реечные панели: {type_name}
 Длина стены: {length_m} м.п.
 Необходимая длина: {required:.2f} м.п.
 Отходы: {waste:.2f} м.п. (10%)
 💰 Стоимость: {cost} ₽
 """
-
     elif category == '3d':
         var = PANELS_3D[item['var']]
         area_m2 = var['area_m2']
@@ -508,7 +524,7 @@ def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit):
         waste_area = total_area - net_area
         waste_pct = (waste_area / total_area) * 100 if total_area > 0 else 0
         cost = panels * price
-        return f"""
+        result_text = f"""
 3D панели: {var['code']}
 Площадь панели: {area_m2} м²
 Количество: {panels} шт.
@@ -516,8 +532,9 @@ def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit):
 Отходы: {waste_area:.2f} м² ({waste_pct:.2f}%)
 💰 Стоимость: {cost} ₽
 """
-
-    return ""
+    else:
+        result_text = ""
+    return result_text, cost
 
 # ============================
 #   CALLBACK HANDLER
@@ -533,7 +550,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         sub = parts[1]
         if sub == 'calc':
             context.chat_data['mode'] = 'calc'
-            context.chat_data['calc_items'] = []
+            context.chat_data['completed_calcs'] = []  # List of (text, cost)
             context.chat_data['phase'] = 'select_cat'
             await query.edit_message_text("Расчёт материалов:", reply_markup=build_calc_category_keyboard())
         elif sub == 'info':
@@ -543,12 +560,12 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif sub == 'presentation':
             await context.bot.send_document(chat_id=query.message.chat_id, document=PRESENTATION_URL, caption="Презентация ECO Стены")
         elif sub == 'contacts':
-            text = "Телефон: +7 (978) 022-32-22\nПочта: info@ecosteni.ru\nГрафик: Пн-Пт 9:00–18:00"
+            text = "Телефон: +7 (978) 022-32-22\nПочта: info@ecosteni.ru\nГрафик: Пн-Пт 9:00–18:00\n\nГруппа в Telegram: https://t.me/ecosteni\nСвязаться с администратором: @DService82\nСайт: https://ecosteni.ru/"
             await query.edit_message_text(text, reply_markup=build_contacts_keyboard())
         elif sub == 'partner':
             context.chat_data['mode'] = 'partner'
             context.chat_data['partner_state'] = 'name'
-            await query.edit_message_text("Как к вам обращаться?")
+            await query.edit_message_text("Как к вам обращаться? (Введите имя)")
         elif sub == 'admin':
             if update.effective_user.id == ADMIN_CHAT_ID:
                 await query.edit_message_text("Администрирование:", reply_markup=build_admin_keyboard())
@@ -588,39 +605,67 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         length = int(parts[3])
         cat = 'spc' if code == 'spc_panel' else 'walls'
         item = {'category': cat, 'product_code': code, 'thickness': thick, 'length': length}
-        context.chat_data['calc_items'].append(item)
-        await query.edit_message_text("Материал добавлен. Добавить ещё?", reply_markup=build_add_more_keyboard())
+        context.chat_data['current_item'] = item
+        await query.edit_message_text("Знаете точное название/артикул материала?", reply_markup=build_custom_name_keyboard())
+    elif action == 'custom_name':
+        item = context.chat_data['current_item']
+        if parts[1] == 'yes':
+            context.chat_data['phase'] = 'custom_name'
+            await query.edit_message_text("Введите название/артикул:")
+        else:
+            # Proceed to units
+            context.chat_data['phase'] = 'units'
+            await query.edit_message_text("В каких единицах удобнее работать?", reply_markup=build_units_keyboard())
     elif action == 'profile_thick':
         thick = int(parts[1])
         context.chat_data['thickness'] = thick
         await query.edit_message_text("Выберите тип профиля:", reply_markup=build_profile_type_keyboard(thick))
     elif action == 'profile_type':
         thick = int(parts[1])
-        type_name = '|'.join(parts[2:])  # If type has |
+        type_name = parts[2].replace('_', ' ')  # Restore spaces
         context.chat_data['profile_type'] = type_name
         context.chat_data['phase'] = 'profile_qty'
         await query.edit_message_text("Введите количество штук профиля:")
     elif action == 'slats_type':
         slat_type = parts[1]
         item = {'category': 'slats', 'type': slat_type}
-        context.chat_data['calc_items'].append(item)
-        await query.edit_message_text("Материал добавлен. Добавить ещё?", reply_markup=build_add_more_keyboard())
+        context.chat_data['current_item'] = item
+        # Proceed to units directly (no custom name for slats)
+        context.chat_data['phase'] = 'units'
+        await query.edit_message_text("В каких единицах удобнее работать?", reply_markup=build_units_keyboard())
     elif action == '3d_size':
         var = parts[1]
         item = {'category': '3d', 'var': var}
-        context.chat_data['calc_items'].append(item)
-        await query.edit_message_text("Материал добавлен. Добавить ещё?", reply_markup=build_add_more_keyboard())
-    elif action == 'add_more':
-        if parts[1] == 'yes':
-            await query.edit_message_text("Выберите категорию:", reply_markup=build_calc_category_keyboard())
-        else:
-            context.chat_data['phase'] = 'units'
-            await query.edit_message_text("В каких единицах удобнее работать?", reply_markup=build_units_keyboard())
+        context.chat_data['current_item'] = item
+        # Proceed to units
+        context.chat_data['phase'] = 'units'
+        await query.edit_message_text("В каких единицах удобнее работать?", reply_markup=build_units_keyboard())
     elif action == 'units':
         unit = parts[1]
         context.chat_data['unit'] = unit
         context.chat_data['phase'] = 'wall_width'
         await query.edit_message_text(f"Введите ширину стены ({unit}):")
+    elif action == 'add_another':
+        if parts[1] == 'yes':
+            context.chat_data['phase'] = 'select_cat'
+            await query.edit_message_text("Выберите категорию для следующего материала:", reply_markup=build_calc_category_keyboard())
+        else:
+            # Show full summary
+            completed = context.chat_data.get('completed_calcs', [])
+            if completed:
+                full_text = "\n\n".join([text for text, _ in completed])
+                total_cost = sum(cost for _, cost in completed)
+                full_text += f"\n\n🎉 Общая стоимость всех материалов: {total_cost} ₽"
+                await query.edit_message_text(full_text)
+                stats = load_stats()
+                stats['calc_count'] += 1
+                stats['calc_today'] += 1
+                save_stats(stats)
+            else:
+                await query.edit_message_text("Расчёт не завершён. Добавьте хотя бы один материал.")
+            # Reset
+            context.chat_data['phase'] = None
+            await context.bot.send_message(query.message.chat_id, "Расчёт завершён! Вернуться в меню?", reply_markup=build_main_menu_keyboard())
     elif action == 'back':
         await query.edit_message_text("Главное меню:", reply_markup=build_main_menu_keyboard())
     elif action == 'admin':
@@ -635,37 +680,32 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif action == 'partner_role':
         role = parts[1]
         context.chat_data['partner_role'] = role
-        await query.edit_message_text("Спасибо! Менеджер свяжется с вами.")
-        # Send to admin
-        partner_data = context.chat_data.get('partner_data', {})
-        msg = f"Новая заявка партнёра: {partner_data}"
-        await context.bot.send_message(ADMIN_CHAT_ID, msg)
-    # Add more for yes/no windows/doors
-    elif action == 'window':
+        context.chat_data['partner_state'] = 'message'
+        await query.edit_message_text("Расскажите подробнее о вашем бизнесе или вопросе:")
+    # Windows/doors
+    elif action.startswith('window') or action.startswith('door'):
+        phase_key = 'windows' if action.startswith('window') else 'doors'
         if parts[1] == 'yes':
-            context.chat_data['phase'] = 'window_size'
-            await query.edit_message_text(f"Введите размеры окна (ширина x высота, в {context.chat_data['unit']}):")
-        else:
-            context.chat_data['phase'] = 'doors'
-            await query.edit_message_text("Есть двери? (Да/Нет)", reply_markup=build_yes_no_keyboard("door|yes", "door|no"))
-    elif action == 'door':
-        if parts[1] == 'yes':
-            context.chat_data['phase'] = 'door_size'
-            await query.edit_message_text(f"Введите размеры двери (ширина x высота, в {context.chat_data['unit']}):")
-        else:
-            # Proceed to calculation
-            items = context.chat_data['calc_items']
-            width = context.chat_data['wall_width_m']
-            height = context.chat_data['wall_height_m']
-            deduct = context.chat_data['deduct_area']
+            size_phase = f"{phase_key}_size"
+            context.chat_data['phase'] = size_phase
             unit = context.chat_data['unit']
-            results = [calculate_item(item, width, height, deduct, unit) for item in items]
-            total_cost = sum(int(re.search(r'(\d+) ₽', res).group(1)) for res in results if re.search(r'(\d+) ₽', res))
-            text = "\n\n".join(results) + f"\n\nОбщая стоимость: {total_cost} ₽"
-            await query.edit_message_text(text)
-            # Reset calc
-            context.chat_data['phase'] = None
-            await context.bot.send_message(query.message.chat_id, "Расчёт завершён! Вернуться в меню?", reply_markup=build_main_menu_keyboard())
+            await query.edit_message_text(f"Введите размеры {phase_key[:-1]} (ширина x высота, в {unit}):")
+        else:
+            next_action = 'door' if action.startswith('window') else 'finish_calc'
+            if next_action == 'finish_calc':
+                # Calculate current item
+                item = context.chat_data['current_item']
+                width = context.chat_data['wall_width_m']
+                height = context.chat_data['wall_height_m']
+                deduct = context.chat_data['deduct_area']
+                unit = context.chat_data['unit']
+                result_text, cost = calculate_item(item, width, height, deduct, unit)
+                context.chat_data['completed_calcs'].append((result_text, cost))
+                await query.edit_message_text(result_text + "\n\nДобавить ещё материал?", reply_markup=build_add_another_keyboard())
+                context.chat_data['phase'] = None
+            else:
+                await query.edit_message_text("Есть двери? (Да/Нет)", reply_markup=build_yes_no_keyboard("door|yes", "door|no"))
+    # Partner role handled above
 
 # ============================
 #   MESSAGE HANDLER
@@ -675,33 +715,68 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     phase = context.chat_data.get('phase')
 
-    if phase == 'name':  # For partner, but sequential
-        # Implement partner sequential as in example
-        pass  # Skip for brevity, similar to example
-
-    if phase == 'profile_qty':
+    if phase == 'partner_name':
+        context.chat_data['partner_name'] = text
+        context.chat_data['partner_state'] = 'contact'
+        await update.message.reply_text("Введите контакт (телефон или email):")
+    elif phase == 'partner_contact':
+        context.chat_data['partner_contact'] = text
+        context.chat_data['partner_state'] = 'role'
+        await update.message.reply_text("Какой у вас тип партнёрства?", reply_markup=build_partner_role_keyboard())
+    elif phase == 'partner_message':
+        context.chat_data['partner_message'] = text
+        # Send to admin
+        partner_data = {
+            'name': context.chat_data.get('partner_name'),
+            'contact': context.chat_data.get('partner_contact'),
+            'role': context.chat_data.get('partner_role'),
+            'message': text
+        }
+        msg = f"Новая заявка партнёра:\nИмя: {partner_data['name']}\nКонтакт: {partner_data['contact']}\nРоль: {partner_data['role']}\nСообщение: {partner_data['message']}"
+        await context.bot.send_message(ADMIN_CHAT_ID, msg)
+        await update.message.reply_text("Спасибо! Менеджер свяжется с вами в ближайшее время.")
+        # Reset
+        context.chat_data['phase'] = None
+        await update.message.reply_text("Вернуться в меню?", reply_markup=build_main_menu_keyboard())
+    elif phase == 'custom_name':
+        item = context.chat_data['current_item']
+        item['custom_name'] = text
+        context.chat_data['current_item'] = item
+        context.chat_data['phase'] = 'units'
+        await update.message.reply_text("В каких единицах удобнее работать?", reply_markup=build_units_keyboard())
+    elif phase == 'profile_qty':
         try:
             qty = int(text)
             item = {'category': 'profiles', 'thickness': context.chat_data['thickness'], 'type': context.chat_data['profile_type'], 'quantity': qty}
-            context.chat_data['calc_items'].append(item)
-            await update.message.reply_text("Профиль добавлен. Добавить ещё?", reply_markup=build_add_more_keyboard())
+            width = context.chat_data.get('wall_width_m', 0)  # For profiles, assume wall width if set, else prompt? But for simplicity, proceed to calc assuming qty is total
+            height = context.chat_data.get('wall_height_m', 0)
+            deduct = context.chat_data.get('deduct_area', 0)
+            unit = context.chat_data.get('unit', 'm')
+            result_text, cost = calculate_item(item, width or 1, height or 1, deduct, unit)  # Dummy if no dims
+            context.chat_data['completed_calcs'].append((result_text, cost))
+            await update.message.reply_text(result_text + "\n\nДобавить ещё материал?", reply_markup=build_add_another_keyboard())
             context.chat_data['phase'] = None
         except:
             await update.message.reply_text("Непонял количество. Попробуйте заново.")
     elif phase == 'wall_width':
         width = parse_size(text, context.chat_data['unit'])
+        if width <= 0:
+            await update.message.reply_text("Неверное значение. Введите ширину заново:")
+            return
         context.chat_data['wall_width_m'] = width
         context.chat_data['phase'] = 'wall_height'
         await update.message.reply_text(f"Введите высоту стены ({context.chat_data['unit']}):")
     elif phase == 'wall_height':
         height = parse_size(text, context.chat_data['unit'])
+        if height <= 0:
+            await update.message.reply_text("Неверное значение. Введите высоту заново:")
+            return
         context.chat_data['wall_height_m'] = height
         context.chat_data['phase'] = 'windows'
         context.chat_data['windows'] = []
         context.chat_data['doors'] = []
         context.chat_data['deduct_area'] = 0.0
         await update.message.reply_text("Есть окна? (Да/Нет)", reply_markup=build_yes_no_keyboard("window|yes", "window|no"))
-    # For windows/doors, use callback for yes/no, then message for size
     elif phase == 'window_size':
         sizes = re.split(r'[xX]', text)
         if len(sizes) == 2:
@@ -709,6 +784,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 w = parse_size(sizes[0].strip(), context.chat_data['unit'])
                 h = parse_size(sizes[1].strip(), context.chat_data['unit'])
                 area = w * h
+                if area <= 0:
+                    raise ValueError
                 context.chat_data['windows'].append(area)
                 context.chat_data['deduct_area'] += area
                 await update.message.reply_text("Окно добавлено. Ещё окно? (Да/Нет)", reply_markup=build_yes_no_keyboard("window|yes", "window|no"))
@@ -723,6 +800,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 w = parse_size(sizes[0].strip(), context.chat_data['unit'])
                 h = parse_size(sizes[1].strip(), context.chat_data['unit'])
                 area = w * h
+                if area <= 0:
+                    raise ValueError
                 context.chat_data['doors'].append(area)
                 context.chat_data['deduct_area'] += area
                 await update.message.reply_text("Дверь добавлена. Ещё дверь? (Да/Нет)", reply_markup=build_yes_no_keyboard("door|yes", "door|no"))
@@ -736,8 +815,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Рассылка отправлена!")
         context.chat_data['phase'] = None
     else:
-        # Default: use OpenAI for chat
-        # Implement chat with OpenAI if needed
+        # Default
         await update.message.reply_text("Используйте кнопки меню для расчёта или напишите /start")
 
 # ============================
@@ -772,18 +850,15 @@ tg_application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 # ============================
 
 async def setup_webhook(application: Application, webhook_url: str):
-    # Ждём стабилизации loop
+    # Ждём стабилизации loop (фикс для RuntimeError)
     await asyncio.sleep(0.1)
     
-    # Сначала удаляем старый webhook...
+    # Сначала удаляем старый webhook, чтобы очистить last_error
     try:
         await application.bot.delete_webhook(drop_pending_updates=True)
         logger.info("Old webhook deleted, pending updates dropped.")
-    except (TelegramError, RuntimeError) as e:  # Добавь RuntimeError
+    except (TelegramError, RuntimeError) as e:
         logger.warning(f"Failed to delete old webhook: {e} (may not exist)")
-    
-    # ...остальное без изменений
-
 
     webhook_path = f"{webhook_url}/{TG_BOT_TOKEN}"
     await application.bot.set_webhook(url=webhook_path)
@@ -818,7 +893,6 @@ def webhook():
         except Exception as e:
             logger.error(f"Error processing update: {e}")
             return jsonify({"ok": False, "error": str(e)}), 500
-
 
 # ============================
 #   MAIN
