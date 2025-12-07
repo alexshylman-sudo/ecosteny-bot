@@ -56,20 +56,41 @@ GREETING_PHRASES = [
 STATS_FILE = "/tmp/eco_stats.json"
 
 def load_stats():
-    if os.path.exists(STATS_FILE):
-        with open(STATS_FILE, 'r') as f:
-            return json.load(f)
-    return {
+    default_stats = {
         "users": set(),
         "calc_count": 0,
         "today": datetime.now(timezone.utc).date().isoformat(),
         "users_today": set(),
         "calc_today": 0
     }
+    if os.path.exists(STATS_FILE):
+        try:
+            with open(STATS_FILE, 'r') as f:
+                loaded = json.load(f)
+                # Convert lists back to sets
+                loaded['users'] = set(loaded.get('users', []))
+                loaded['users_today'] = set(loaded.get('users_today', []))
+                return loaded
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            logger.warning(f"Corrupted stats file, starting fresh: {e}")
+            # Optionally remove corrupted file
+            os.remove(STATS_FILE)
+    return default_stats
 
 def save_stats(stats):
-    with open(STATS_FILE, 'w') as f:
-        json.dump(stats, f)
+    # Convert sets to lists for JSON
+    serializable = {
+        "users": list(stats['users']),
+        "calc_count": stats['calc_count'],
+        "today": stats['today'],
+        "users_today": list(stats['users_today']),
+        "calc_today": stats['calc_today']
+    }
+    try:
+        with open(STATS_FILE, 'w') as f:
+            json.dump(serializable, f)
+    except Exception as e:
+        logger.error(f"Failed to save stats: {e}")
 
 # ============================
 #   КАТАЛОГ МАТЕРИАЛОВ
