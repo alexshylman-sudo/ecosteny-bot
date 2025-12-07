@@ -22,9 +22,13 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+import logging  # Добавлено для logger
 
 import sys
 from telegram import __version__ as TG_VER
+
+logger = logging.getLogger(__name__)  # Определение logger
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 print("### PYTHON VERSION ON RENDER:", sys.version)
 print("### python-telegram-bot VERSION ON RENDER:", TG_VER)
@@ -40,7 +44,7 @@ if not TG_BOT_TOKEN:
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 ADMIN_CHAT_ID = int(os.getenv("ADMIN_CHAT_ID", "0"))
 
-WELCOME_PHOTO_URL = "https://ecosteni.ru/wp-content/uploads/2025/11/qncccaze.jpg"
+WELCOME_PHOTO_URL = "https://ecosteni.ru/wp-content/uploads/2025/11/qncccaze.jpg"  # Проверить, существует ли файл
 WELCOME_GIF_URL = ""
 
 GREETING_PHRASES = [
@@ -205,6 +209,12 @@ app = Flask(__name__)
 
 # Создаём приложение Telegram
 tg_application = Application.builder().token(TG_BOT_TOKEN).build()
+
+# Добавляем error handler
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.error(f"Exception while handling an update: {context.error}")
+
+tg_application.add_error_handler(error_handler)
 
 # ============================
 #   КЛАВИАТУРЫ
@@ -509,11 +519,11 @@ async def send_greeting_with_media(message_obj, context: ContextTypes.DEFAULT_TY
         try:
             await message_obj.reply_animation(animation=WELCOME_GIF_URL, caption=None)
         except Exception as e:
-            print("Ошибка отправки GIF:", repr(e))
+            logger.error("Ошибка отправки GIF: %s", e)
     try:
         await message_obj.reply_photo(photo=WELCOME_PHOTO_URL, caption=greeting_text)
     except Exception as e:
-        print("Ошибка отправки фото:", repr(e))
+        logger.error("Ошибка отправки фото: %s", e)
 
 # ============================
 #   SMALLTALK
@@ -547,12 +557,12 @@ async def handle_smalltalk(update: Update, context: ContextTypes.DEFAULT_TYPE):
             json=payload,
             timeout=30,
         )
-        print("SMALLTALK RAW RESPONSE:", resp.text)
+        logger.info("SMALLTALK RAW RESPONSE: %s", resp.text)
         resp.raise_for_status()
         data = resp.json()
         answer = data["choices"][0]["message"]["content"].strip()
     except Exception as e:
-        print("SMALLTALK ERROR:", repr(e))
+        logger.error("SMALLTALK ERROR: %s", e)
         answer = (
             "Сейчас у меня не получается обратиться к модели, "
             "но я всё равно могу подсказать по нашим материалам — задайте вопрос про панели или интерьер."
@@ -568,6 +578,7 @@ async def handle_smalltalk(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ============================
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info("Received /start from user: %s", update.effective_user.id)  # Добавлено для отладки
     context.chat_data.clear()
     context.chat_data["started"] = True
     context.chat_data["main_mode"] = None
@@ -625,7 +636,7 @@ async def reply_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await update.message.reply_text("Сообщение отправлено клиенту ✅")
     except Exception as e:
-        print("ERROR sending admin reply:", repr(e))
+        logger.error("ERROR sending admin reply: %s", e)
         await update.message.reply_text(
             "Не удалось отправить сообщение клиенту. Проверьте ID или попробуйте позже."
         )
@@ -729,7 +740,7 @@ async def handle_partner_text(update: Update, context: ContextTypes.DEFAULT_TYPE
             try:
                 await tg_application.bot.send_message(chat_id=ADMIN_CHAT_ID, text=msg)
             except Exception as e:
-                print("ERROR sending partner info to admin:", repr(e))
+                logger.error("ERROR sending partner info to admin: %s", e)
 
         await update.message.reply_text(
             "Спасибо! Мы получили вашу заявку. Менеджер свяжется с вами в ближайшее время.\n\n"
@@ -920,12 +931,12 @@ async def perform_text_calc(update: Update, context: ContextTypes.DEFAULT_TYPE):
             json=payload,
             timeout=60,
         )
-        print("TEXT CALC RAW RESPONSE:", resp.text)
+        logger.info("TEXT CALC RAW RESPONSE: %s", resp.text)
         resp.raise_for_status()
         data = resp.json()
         answer = data["choices"][0]["message"]["content"].strip()
     except Exception as e:
-        print("TEXT CALC ERROR:", repr(e))
+        logger.error("TEXT CALC ERROR: %s", e)
         answer = "Извините, сейчас не могу выполнить расчёт. Попробуйте чуть позже."
 
     warning = (
@@ -1034,7 +1045,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 await query.answer("Расчёт отправлен админу ✅", show_alert=True)
             except Exception as e:
-                print("ERROR sending calc to admin:", repr(e))
+                logger.error("ERROR sending calc to admin: %s", e)
                 await query.answer("Не удалось отправить расчёт админу 😔", show_alert=True)
             return
 
@@ -1165,7 +1176,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     caption="Презентационный каталог ECO Стены (PDF)",
                 )
             except Exception as e:
-                print("ERROR sending presentation:", repr(e))
+                logger.error("ERROR sending presentation: %s", e)
                 await query.message.reply_text(
                     "Не получилось отправить файл. Вот ссылка:\n"
                     "https://ecosteni.ru/wp-content/uploads/2025/11/ecosteny_prezentacziya.pdf"
@@ -2075,12 +2086,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             json=payload,
             timeout=60,
         )
-        print("PHOTO RAW RESPONSE:", resp.text)
+        logger.info("PHOTO RAW RESPONSE: %s", resp.text)
         resp.raise_for_status()
         data = resp.json()
         answer = data["choices"][0]["message"]["content"].strip()
     except Exception as e:
-        print("PHOTO ERROR:", repr(e))
+        logger.error("PHOTO ERROR: %s", e)
         answer = (
             "Сейчас не получается автоматически обработать фото планировки/развертки. "
             "Пришлите, пожалуйста, размеры стен текстом, и я помогу с расчётом."
@@ -2129,46 +2140,39 @@ def index():
 @app.route(f"/{TG_BOT_TOKEN}", methods=["POST"])
 def telegram_webhook():
     try:
-        # Проверка секретного заголовка (рекомендуется)
-        # token = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
-        # if token != WEBHOOK_SECRET:
-        #     logger.warning("Bad secret token for incoming webhook")
-        #     return abort(401)
-
         update_json = request.get_json(force=True)
         if not update_json:
             return jsonify({"status": "no update"}), 200
 
         update = Update.de_json(update_json, tg_application.bot)
 
-        # Выполняем асинхронную обработку в синхронном обработчике
+        # Выполняем асинхронную обработку
         try:
-            asyncio.run(tg_application.process_update(update))
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(tg_application.process_update(update))
         except Exception as proc_exc:
-            # Логируем ошибки process_update отдельно
             logger.exception("Error while processing update: %s", proc_exc)
-            # Важно: если process_update бросил исключение, вернуть 500
             return jsonify({"status": "error", "detail": str(proc_exc)}), 500
 
         return jsonify({"status": "ok"}), 200
 
     except Exception as e:
         logger.exception("Webhook error: %s", e)
-        # Если что-то пошло не так до вызова process_update
         return jsonify({"status": "error", "detail": str(e)}), 500
 
 def setup_webhook():
     loop = asyncio.get_event_loop()
     async def async_setup():
-        print("Initializing application...")
+        logger.info("Initializing application...")
         await tg_application.initialize()
         hostname = os.getenv("RENDER_EXTERNAL_HOSTNAME")
         if not hostname:
             raise ValueError("RENDER_EXTERNAL_HOSTNAME not set")
         webhook_url = f"https://{hostname}/{TG_BOT_TOKEN}"
-        print(f"Setting webhook to: {webhook_url}")
+        logger.info(f"Setting webhook to: {webhook_url}")
         await tg_application.bot.set_webhook(webhook_url)
-        print("Webhook set successfully")
+        webhook_info = await tg_application.bot.get_webhook_info()  # Добавлено для отладки
+        logger.info("Webhook info: %s", webhook_info)
     loop.run_until_complete(async_setup())
 
 if __name__ == "__main__":
