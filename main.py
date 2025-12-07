@@ -5,7 +5,7 @@ import json
 import os
 import random
 from datetime import datetime, timezone
-import re  # Добавлено для парсинга размеров
+import re  # Парсинг размеров
 
 import requests
 from quart import Quart, request, jsonify
@@ -22,16 +22,26 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-import logging  # Добавлено для logger
 
+import logging
 import sys
 from telegram import __version__ as TG_VER
 
-logger = logging.getLogger(__name__)  # Определение logger
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# ---- Logging ----
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 print("### PYTHON VERSION ON RENDER:", sys.version)
 print("### python-telegram-bot VERSION ON RENDER:", TG_VER)
+
+# ---- РЕШЕНИЕ ПРОБЛЕМЫ С ПОРТОМ ----
+# Render передаёт порт через переменную окружения PORT.
+# Если её нет — ставим fallback 10000.
+PORT = int(os.environ.get("PORT", 10000))
+
 
 # ============================
 #   НАСТРОЙКИ (через .env)
