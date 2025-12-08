@@ -9,7 +9,6 @@ import re
 import math
 import logging
 import threading  # Для thread-safety
-import atexit  # Для shutdown
 
 import requests
 from flask import Flask, request, jsonify
@@ -29,7 +28,7 @@ from telegram.ext import (
 )
 from telegram.error import TelegramError
 
-# Настройка логирования (больше деталей)
+# Настройка логирования
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -110,14 +109,14 @@ def save_stats(stats):
         logger.error(f"Failed to save stats: {e}")
 
 # ============================
-#   КАТАЛОГ МАТЕРИАЛОВ (с добавленным весом)
+#   КАТАЛОГ МАТЕРИАЛОВ
 # ============================
 
 WALL_PRODUCTS = {
     "WPC Бамбук угольный": {
         5: {
             "width_mm": 1220,
-            "weight_per_m2": 4,  # Добавлено: кг/м²
+            "weight_per_m2": 4,
             "panels": {
                 2440: {"area_m2": 2.928, "price_rub": 10500},
                 2600: {"area_m2": 3.12, "price_rub": 11100},
@@ -128,7 +127,7 @@ WALL_PRODUCTS = {
         },
         8: {
             "width_mm": 1220,
-            "weight_per_m2": 5,  # Добавлено: кг/м²
+            "weight_per_m2": 5,
             "panels": {
                 2440: {"area_m2": 2.928, "price_rub": 12200},
                 2600: {"area_m2": 3.12, "price_rub": 13000},
@@ -141,7 +140,7 @@ WALL_PRODUCTS = {
     "WPC Бамбук": {
         5: {
             "width_mm": 1220,
-            "weight_per_m2": 4,  # Добавлено
+            "weight_per_m2": 4,
             "panels": {
                 2440: {"area_m2": 2.928, "price_rub": 12200},
                 2600: {"area_m2": 3.12, "price_rub": 13000},
@@ -152,7 +151,7 @@ WALL_PRODUCTS = {
         },
         8: {
             "width_mm": 1220,
-            "weight_per_m2": 5,  # Добавлено
+            "weight_per_m2": 5,
             "panels": {
                 2440: {"area_m2": 2.928, "price_rub": 13900},
                 2600: {"area_m2": 3.12, "price_rub": 14900},
@@ -165,7 +164,7 @@ WALL_PRODUCTS = {
     "WPC повышенной плотности": {
         8: {
             "width_mm": 1220,
-            "weight_per_m2": 5.6,  # Добавлено
+            "weight_per_m2": 5.6,
             "panels": {
                 2440: {"area_m2": 2.928, "price_rub": 15500},
                 2600: {"area_m2": 3.12, "price_rub": 16500},
@@ -178,7 +177,7 @@ WALL_PRODUCTS = {
     "WPC Бамбук с защитным слоем": {
         8: {
             "width_mm": 1220,
-            "weight_per_m2": 5,  # Добавлено (предположительно, как для WPC Бамбук 8мм; уточните если нужно)
+            "weight_per_m2": 5,
             "panels": {
                 2440: {"area_m2": 2.928, "price_rub": 16400},
                 2600: {"area_m2": 3.12, "price_rub": 17500},
@@ -191,7 +190,7 @@ WALL_PRODUCTS = {
     "WPC повышенной плотности с защитным слоем": {
         8: {
             "width_mm": 1220,
-            "weight_per_m2": 8,  # Добавлено
+            "weight_per_m2": 8,
             "panels": {
                 2440: {"area_m2": 2.928, "price_rub": 18000},
                 2600: {"area_m2": 3.12, "price_rub": 19100},
@@ -243,7 +242,7 @@ PANELS_3D = {
 SYSTEM_PROMPT = """
 Ты — онлайн-консультант компании ECO Стены.
 
-У тебя есть каталог стеновых WPC панелей с размерами, площадью покрытия, ценой и весом за 1 м².
+У тебя есть каталог стеновых WPC панелей с размерами, площадью покрытия и ценой за 1 панель.
 Каталог передаётся тебе в виде JSON в сообщении. Используй ТОЛЬКО его для расчётов по стеновым панелям.
 
 ВАЖНО:
@@ -251,7 +250,6 @@ SYSTEM_PROMPT = """
 — Если JSON каталога отсутствует, честно скажи, что точный расчёт доступен только при наличии каталога (который подгружается система),
   и предложи связаться с менеджером.
 — Если клиент выбрал через кнопки конкретную панель, толщину и высоту — ОБЯЗАН использовать именно эту комбинацию.
-— В расчёте учитывай вес: общий вес = площадь * weight_per_m2.
 
 ОГРАНИЧЕНИЯ:
 — WPC повышенной плотности не бывает толщиной 5 мм.
@@ -288,15 +286,15 @@ tg_application = Application.builder().token(TG_BOT_TOKEN).build()
 
 def build_main_menu_keyboard() -> InlineKeyboardMarkup:
     buttons = [
-        [InlineKeyboardButton("Расчитать материалы", callback_data="main|calc")],
-        [InlineKeyboardButton("Информация", callback_data="main|info")],
-        [InlineKeyboardButton("Получить каталоги", callback_data="main|catalogs")],
-        [InlineKeyboardButton("Получить презентацию", callback_data="main|presentation")],
-        [InlineKeyboardButton("Контактная информация", callback_data="main|contacts")],
-        [InlineKeyboardButton("Хочу стать партнёром", callback_data="main|partner")],
+        [InlineKeyboardButton("🧱 Рассчитать материалы", callback_data="main|calc")],
+        [InlineKeyboardButton("ℹ️ Информация", callback_data="main|info")],
+        [InlineKeyboardButton("📚 Получить каталоги", callback_data="main|catalogs")],
+        [InlineKeyboardButton("📄 Получить презентацию", callback_data="main|presentation")],
+        [InlineKeyboardButton("📞 Контактная информация", callback_data="main|contacts")],
+        [InlineKeyboardButton("🤝 Хочу стать партнёром", callback_data="main|partner")],
     ]
     if ADMIN_CHAT_ID:
-        buttons.append([InlineKeyboardButton("Администрирование", callback_data="main|admin")])
+        buttons.append([InlineKeyboardButton("⚙️ Администрирование", callback_data="main|admin")])
     return InlineKeyboardMarkup(buttons)
 
 def build_back_button(text="Назад"):
@@ -304,463 +302,794 @@ def build_back_button(text="Назад"):
 
 def build_calc_category_keyboard() -> InlineKeyboardMarkup:
     rows = [
-        [InlineKeyboardButton("Стеновые WPC панели", callback_data="calc|wall")],
-        [InlineKeyboardButton("Реечные панели WPC", callback_data="calc|slat_wpc")],
-        [InlineKeyboardButton("Реечные панели дерево", callback_data="calc|slat_wood")],
-        [InlineKeyboardButton("3D панели", callback_data="calc|3d")],
-        [InlineKeyboardButton("Профили", callback_data="calc|profile")],
+        [InlineKeyboardButton("🧱 Стеновые панели WPC", callback_data="calc_cat|walls")],
+        [InlineKeyboardButton("🔩 Профили", callback_data="calc_cat|profiles")],
+        [InlineKeyboardButton("📏 Реечные панели", callback_data="calc_cat|slats")],
+        [InlineKeyboardButton("🎨 3D-панели", callback_data="calc_cat|3d")],
+        [InlineKeyboardButton("🪨 Гибкий камень", callback_data="calc_cat|flex")],
     ]
-    rows.append(build_back_button()[0])
+    rows += build_back_button("В главное меню")
     return InlineKeyboardMarkup(rows)
 
-def build_wall_type_keyboard() -> InlineKeyboardMarkup:
-    types = list(WALL_PRODUCTS.keys())
-    buttons = [[InlineKeyboardButton(type_name, callback_data=f"calc_type|{type_name}")] for type_name in types]
-    buttons.append(build_back_button()[0])
+def build_wall_product_keyboard() -> InlineKeyboardMarkup:
+    buttons = []
+    for code, title in PRODUCT_CODES.items():
+        buttons.append([InlineKeyboardButton(text=title, callback_data=f"product|{code}")])
+    buttons += build_back_button("Назад")
     return InlineKeyboardMarkup(buttons)
 
-def build_thickness_keyboard(thicknesses: list) -> InlineKeyboardMarkup:
-    buttons = [[InlineKeyboardButton(f"{t} мм", callback_data=f"thickness|{t}")] for t in thicknesses]
-    buttons.append(build_back_button()[0])
+def build_thickness_keyboard(code: str) -> InlineKeyboardMarkup:
+    title = PRODUCT_CODES[code]
+    thicknesses = WALL_PRODUCTS[title].keys()
+    buttons = [[InlineKeyboardButton(f"{thick} мм", callback_data=f"thickness|{code}|{thick}")] for thick in thicknesses]
+    buttons += build_back_button("Назад")
     return InlineKeyboardMarkup(buttons)
 
-def build_method_keyboard() -> InlineKeyboardMarkup:
+def build_length_keyboard(code: str, thick: int) -> InlineKeyboardMarkup:
+    title = PRODUCT_CODES[code]
+    lengths = WALL_PRODUCTS[title][thick]['panels'].keys()
+    buttons = [[InlineKeyboardButton(f"{length} мм", callback_data=f"length|{code}|{thick}|{length}")] for length in lengths]
+    buttons += build_back_button("Назад")
+    return InlineKeyboardMarkup(buttons)
+
+def build_profile_thickness_keyboard() -> InlineKeyboardMarkup:
     buttons = [
-        [InlineKeyboardButton("По размерам помещения", callback_data="calc_method|room")],
-        [InlineKeyboardButton("По количеству панелей", callback_data="calc_method|panels")],
+        [InlineKeyboardButton("5 мм", callback_data="profile_thick|5")],
+        [InlineKeyboardButton("8 мм", callback_data="profile_thick|8")],
     ]
-    buttons.append(build_back_button()[0])
+    buttons += build_back_button("Назад")
     return InlineKeyboardMarkup(buttons)
 
-def build_length_keyboard(panels: dict) -> InlineKeyboardMarkup:
-    lengths = list(panels.keys())
-    buttons = [[InlineKeyboardButton(f"{l} мм", callback_data=f"calc_length|{l}")] for l in lengths]
-    buttons.append(build_back_button()[0])
+def build_profile_type_keyboard(thick: int) -> InlineKeyboardMarkup:
+    types = PROFILES[thick].keys()
+    buttons = [[InlineKeyboardButton(name, callback_data=f"profile_type|{thick}|{name.replace(' ', '_')}")] for name in types]
+    buttons += build_back_button("Назад")
     return InlineKeyboardMarkup(buttons)
 
-# ============================
-#   ОБРАБОТЧИКИ
-# ============================
+def build_slats_type_keyboard() -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton("WPC рейки", callback_data="slats_type|wpc")],
+        [InlineKeyboardButton("Деревянные рейки", callback_data="slats_type|wood")],
+    ]
+    buttons += build_back_button("Назад")
+    return InlineKeyboardMarkup(buttons)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+def build_3d_size_keyboard() -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton("600x1200 мм", callback_data="3d_size|var1")],
+        [InlineKeyboardButton("1200x3000 мм", callback_data="3d_size|var2")],
+    ]
+    buttons += build_back_button("Назад")
+    return InlineKeyboardMarkup(buttons)
+
+def build_add_another_keyboard() -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton("Да, добавить ещё материал", callback_data="add_another|yes")],
+        [InlineKeyboardButton("Расчёт окончен", callback_data="add_another|no")],
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+def build_custom_name_keyboard() -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton("Да, знаю название/артикул", callback_data="custom_name|yes")],
+        [InlineKeyboardButton("Нет, стандартный", callback_data="custom_name|no")],
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+def build_units_keyboard() -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton("Метры (м)", callback_data="units|m")],
+        [InlineKeyboardButton("Миллиметры (мм)", callback_data="units|mm")],
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+def build_yes_no_keyboard(yes_data, no_data) -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton("Да", callback_data=yes_data)],
+        [InlineKeyboardButton("Нет", callback_data=no_data)],
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+def build_contacts_keyboard() -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton("Группа в Telegram", url="https://t.me/ecosteni")],
+        [InlineKeyboardButton("Связаться с администратором", url="https://t.me/DService82")],
+        [InlineKeyboardButton("Сайт", url="https://ecosteni.ru/")],
+        [InlineKeyboardButton("Написать в WhatsApp", url="https://wa.me/79780223222")],
+    ]
+    buttons += build_back_button("Назад")
+    return InlineKeyboardMarkup(buttons)
+
+def build_admin_keyboard() -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton("📊 Сатистика", callback_data="admin|stats")],
+        [InlineKeyboardButton("📢 Рассылка", callback_data="admin|broadcast")],
+    ]
+    buttons += build_back_button("Назад")
+    return InlineKeyboardMarkup(buttons)
+
+def build_partner_role_keyboard() -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton("🛒 Розничный магазин", callback_data="partner_role|retail")],
+        [InlineKeyboardButton("🔨 Монтажная бригада", callback_data="partner_role|installer")],
+        [InlineKeyboardButton("🎨 Дизайнер/Архитектор", callback_data="partner_role|designer")],
+        [InlineKeyboardButton("❓ Другое", callback_data="partner_role|other")],
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+async def send_greeting(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    first_name = user.first_name or user.username or "друг"
-    greeting = random.choice(GREETING_PHRASES).format(name=first_name)
-    
-    # Статистика
+    name = user.first_name or user.username or "друг"
+    greeting = random.choice(GREETING_PHRASES).format(name=name)
+    try:
+        await context.bot.send_photo(chat_id=update.effective_chat.id, photo=WELCOME_PHOTO_URL, caption=greeting)
+    except Exception as e:
+        logger.error(f"Error sending photo: {e}")
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=greeting)
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="Чем могу помочь?", reply_markup=build_main_menu_keyboard())
+
+# For stats: on start, add user
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stats = load_stats()
-    stats['users'].add(user.id)
-    stats['users_today'].add(user.id)
-    if stats['today'] != datetime.now(timezone.utc).date().isoformat():
-        stats['today'] = datetime.now(timezone.utc).date().isoformat()
-        stats['users_today'] = set([user.id])
+    today = datetime.now(timezone.utc).date().isoformat()
+    if stats['today'] != today:
+        stats['users_today'] = set()
         stats['calc_today'] = 0
+        stats['today'] = today
+    stats['users'].add(update.effective_chat.id)
+    stats['users_today'].add(update.effective_chat.id)
     save_stats(stats)
-    
-    await update.message.reply_photo(
-        photo=WELCOME_PHOTO_URL,
-        caption=greeting,
+    await send_greeting(update, context)
+
+# ============================
+#   РАССЧЁТ
+# ============================
+
+def parse_size(text: str, unit: str) -> float:
+    try:
+        # Улучшенный парсинг: поддержка простых выражений вроде "1.2 + 3.4"
+        # Безопасный eval только для математических операций
+        allowed_names = {"__builtins__": {}, "math": math}
+        expr = re.sub(r'[^\d\s+\-*/().]', '', text.strip())  # Очистка от нецифр кроме операторов
+        if expr:
+            num = eval(expr, allowed_names)
+        else:
+            num = float(text.strip())
+        return num / 1000 if unit == "mm" else num
+    except:
+        return 0.0
+
+def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit, calc_mode=None, panel_h_m=None) -> tuple[str, int]:
+    category = item['category']
+    cost = 0
+    if category == 'walls':
+        title = PRODUCT_CODES[item['product_code']]
+        thickness = item.get('thickness', 0)
+        length_mm = item['length']
+        panel = WALL_PRODUCTS[title][thickness]['panels'][length_mm]
+        area_m2 = panel['area_m2']
+        price = panel['price_rub']
+        panel_width_mm = WALL_PRODUCTS[title][thickness]['width_mm']
+        weight_per_m2 = WALL_PRODUCTS[title][thickness].get('weight_per_m2')
+        panel_w_m = panel_width_mm / 1000
+        panel_h_m = length_mm / 1000 if panel_h_m is None else panel_h_m
+        if 'known_panels' in item:
+            panels = item['known_panels']
+            total_area = panels * area_m2
+            net_area = total_area
+            waste_area = 0
+            waste_pct = 0
+            cost = panels * price
+            total_weight = total_area * weight_per_m2 if weight_per_m2 else None
+            custom_name = item.get('custom_name', 'Стандартный')
+            result_text = f"""Выбранный материал: {title}  
+Толщина: {thickness} мм  
+Высота: {length_mm} мм  
+Название/артикул клиента: <b>«{custom_name}»</b>  
+
+🔸 Количество панелей: {panels}  
+🔸 Площадь одной панели ({length_mm} мм × {panel_width_mm} мм): {area_m2} м²  
+🔸 Общая площадь: {panels} панелей × {area_m2} м² = {total_area:.1f} м²  
+
+💰 Ориентировочная стоимость: {panels} панелей × {price:,} ₽ = {cost:,} ₽  """
+            if total_weight is not None:
+                result_text += f"\n\nОбщий вес: {total_weight:.2f} кг  "
+            result_text += f"""\n\n____________________________________________________________  
+Итог:  
+- Необходимое количество панелей: {panels}  
+- Общая стоимость: {cost:,} ₽  """
+        else:
+            if calc_mode == 'panel':
+                eff_h = min(wall_height_m, panel_h_m)
+                mode_text = "(обрезка по высоте панели)"
+            else:
+                eff_h = wall_height_m
+                mode_text = "(стыковка панелей)"
+            gross_area = wall_width_m * eff_h
+            net_area = gross_area - deduct_area_m2
+            num_rows = 1 if calc_mode == 'panel' else math.ceil(wall_height_m / panel_h_m)
+            num_cols = math.ceil(wall_width_m / panel_w_m)
+            total_panels_approx = num_rows * num_cols
+            required_area = net_area * 1.1  # 10% reserve
+            panels = max(total_panels_approx, math.ceil(required_area / area_m2))
+            total_area = panels * area_m2
+            waste_area = total_area - net_area
+            waste_pct = (waste_area / total_area) * 100 if total_area > 0 else 0
+            cost = panels * price
+            total_weight = total_area * weight_per_m2 if weight_per_m2 else None
+            custom_name = item.get('custom_name', 'Стандартный')
+            width_mm = wall_width_m * 1000
+            width_m = wall_width_m
+            result_text = f"""Выбранный материал: {title}  
+Толщина: {thickness} мм  
+Высота: {length_mm} мм {mode_text}  
+Название/артикул клиента: <b>«{custom_name}»</b>  
+
+🔹 Ширина зоны отделки: {width_mm:.1f} мм (или {width_m:.2f} м)  
+🔹 Площадь зоны отделки: {width_m:.2f} м × {eff_h:.1f} м = {gross_area:.2f} м²  
+🔹 Площадь к вычету (окна/двери): {deduct_area_m2:.2f} м²  
+🔹 Общая площадь для покрытия: {gross_area:.2f} м² - {deduct_area_m2:.2f} м² = {net_area:.2f} м²  
+
+🔸 Площадь одной панели ({length_mm} мм × {panel_width_mm} мм): {area_m2} м²  
+🔸 Необходимое количество панелей: {net_area:.2f} м² ÷ {area_m2} м² ≈ {net_area / area_m2:.2f} (округляем до {panels} панелей, с учётом рядов: {num_rows} рядов × {num_cols} панелей в ряду)  
+🔸 Общая площадь закупаемых панелей: {panels} панелей × {area_m2} м² = {total_area:.1f} м²  
+
+🔹 Отходы:  
+- Площадь отходов: {total_area:.1f} м² - {net_area:.2f} м² = {waste_area:.2f} м²  
+- Процент отходов: ({waste_area:.2f} м² ÷ {total_area:.1f} м²) × 100 ≈ {waste_pct:.2f}%  
+
+💰 Ориентировочная стоимость: {panels} панелей × {price:,} ₽ = {cost:,} ₽  """
+            if total_weight is not None:
+                result_text += f"\n\nОбщий вес: {total_weight:.2f} кг  "
+            result_text += f"""\n\n____________________________________________________________  
+Итог:  
+- Необходимое количество панелей: {panels}  
+- Общая стоимость: {cost:,} ₽  
+- Отходы: {waste_area:.2f} м² ({waste_pct:.2f}%)"""
+    elif category == 'profiles':
+        thickness = item['thickness']
+        type_name = item['type']
+        quantity = item['quantity']
+        price = PROFILES[thickness][type_name]
+        cost = quantity * price
+        result_text = f"""
+Профиль: {type_name}, {thickness} мм
+Количество: {quantity} шт.
+💰 Стоимость: {cost} ₽
+"""
+    elif category == 'slats':
+        type_name = 'WPC' if item['type'] == 'wpc' else 'Деревянные'
+        price_mp = SLAT_PRICES[item['type']]
+        length_m = wall_width_m  # Длина стены в м
+        required = length_m * 1.1
+        cost = math.ceil(required) * price_mp  # Округление вверх
+        waste = required - length_m
+        result_text = f"""
+Реечные панели: {type_name}
+Длина стены: {length_m} м.п.
+Необходимая длина: {required:.2f} м.п.
+Отходы: {waste:.2f} м.п. (10%)
+💰 Стоимость: {cost} ₽
+"""
+    elif category == '3d':
+        var = PANELS_3D[item['var']]
+        area_m2 = var['area_m2']
+        price = var['price_rub']
+        gross_area = wall_width_m * wall_height_m
+        net_area = gross_area - deduct_area_m2
+        panels = math.ceil(net_area / area_m2)
+        total_area = panels * area_m2
+        waste_area = total_area - net_area
+        waste_pct = (waste_area / total_area) * 100 if total_area > 0 else 0
+        cost = panels * price
+        result_text = f"""
+3D панели: {var['code']}
+Площадь панели: {area_m2} м²
+Количество: {panels} шт.
+Общая площадь: {total_area} м²
+Отходы: {waste_area:.2f} м² ({waste_pct:.2f}%)
+💰 Стоимость: {cost} ₽
+"""
+    else:
+        result_text = ""
+    return result_text, cost
+
+# ============================
+#   CALLBACK HANDLER
+# ============================
+
+async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    data = query.data
+    parts = data.split('|')
+    action = parts[0]
+
+    if action == 'main':
+        sub = parts[1]
+        if sub == 'calc':
+            context.chat_data['mode'] = 'calc'
+            context.chat_data['completed_calcs'] = []  # List of (text, cost)
+            context.chat_data['phase'] = 'select_cat'
+            await query.edit_message_text("Расчёт материалов:", reply_markup=build_calc_category_keyboard())
+        elif sub == 'info':
+            await query.edit_message_text("Информация в разработке.")
+        elif sub == 'catalogs':
+            await query.edit_message_text("Каталог в разработке.")
+        elif sub == 'presentation':
+            await context.bot.send_document(chat_id=query.message.chat_id, document=PRESENTATION_URL, caption="Презентация ECO Стены")
+        elif sub == 'contacts':
+            text = "Телефон: +7 (978) 022-32-22\nПочта: info@ecosteni.ru\nГрафик: Пн-Пт 9:00–18:00\n\nГруппа в Telegram: https://t.me/ecosteni\nСвязаться с администратором: @DService82\nСайт: https://ecosteni.ru/"
+            await query.edit_message_text(text, reply_markup=build_contacts_keyboard())
+        elif sub == 'partner':
+            context.chat_data['mode'] = 'partner'
+            context.chat_data['phase'] = 'partner_name'
+            await query.edit_message_text("🤝 Хочу стать партнёром!\n\nКак к вам обращаться? (Введите имя)")
+        elif sub == 'admin':
+            if update.effective_user.id == ADMIN_CHAT_ID:
+                await query.edit_message_text("Администрирование:", reply_markup=build_admin_keyboard())
+            else:
+                await query.edit_message_text("Доступ запрещён.")
+    elif action == 'calc_cat':
+        cat = parts[1]
+        context.chat_data['current_cat'] = cat
+        if cat == 'walls':
+            await query.edit_message_text("Выберите тип WPC:", reply_markup=build_wall_product_keyboard())
+        elif cat == 'profiles':
+            await query.edit_message_text("Выберите толщину профиля:", reply_markup=build_profile_thickness_keyboard())
+        elif cat == 'slats':
+            await query.edit_message_text("Выберите тип реечных панелей:", reply_markup=build_slats_type_keyboard())
+        elif cat == '3d':
+            await query.edit_message_text("Выберите размер 3D панели:", reply_markup=build_3d_size_keyboard())
+        elif cat == 'flex':
+            await query.edit_message_text("Гибкий камень в разработке.")
+    elif action == 'product':
+        code = parts[1]
+        context.chat_data['product_code'] = code
+        title = PRODUCT_CODES[code]
+        await query.edit_message_text("Выберите толщину:", reply_markup=build_thickness_keyboard(code))
+    elif action == 'thickness':
+        code = parts[1]
+        thick = int(parts[2])
+        context.chat_data['thickness'] = thick
+        await query.edit_message_text("Выберите длину:", reply_markup=build_length_keyboard(code, thick))
+    elif action == 'length':
+        code = parts[1]
+        thick = int(parts[2])
+        length = int(parts[3])
+        title = PRODUCT_CODES[code]
+        available_lengths = list(WALL_PRODUCTS[title][thick]['panels'].keys())
+        cat = 'walls'
+        item = {'category': cat, 'product_code': code, 'thickness': thick, 'length': length, 'available_lengths': available_lengths}
+        context.chat_data['current_item'] = item
+        await query.edit_message_text("Знаете точное название/артикул материала?", reply_markup=build_custom_name_keyboard())
+    elif action == 'custom_name':
+        item = context.chat_data['current_item']
+        if parts[1] == 'yes':
+            context.chat_data['phase'] = 'custom_name'
+            await query.edit_message_text("Введите название/артикул:")
+        else:
+            await query.edit_message_text("Как рассчитать?", reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("По размерам помещения", callback_data="calc_type|room")],
+                [InlineKeyboardButton("По количеству панелей", callback_data="calc_type|panels")],
+            ]))
+    elif action == 'profile_thick':
+        thick = int(parts[1])
+        context.chat_data['thickness'] = thick
+        await query.edit_message_text("Выберите тип профиля:", reply_markup=build_profile_type_keyboard(thick))
+    elif action == 'profile_type':
+        thick = int(parts[1])
+        type_name = parts[2].replace('_', ' ')  # Restore spaces
+        context.chat_data['profile_type'] = type_name
+        context.chat_data['phase'] = 'profile_qty'
+        await query.edit_message_text("Введите количество штук профиля:")
+    elif action == 'slats_type':
+        slat_type = parts[1]
+        item = {'category': 'slats', 'type': slat_type}
+        context.chat_data['current_item'] = item
+        # Proceed to units or wall_width
+        await proceed_to_wall_input(query, context)
+    elif action == '3d_size':
+        var = parts[1]
+        item = {'category': '3d', 'var': var}
+        context.chat_data['current_item'] = item
+        # Proceed to units or wall_width
+        await proceed_to_wall_input(query, context)
+    elif action == 'units':
+        unit = parts[1]
+        context.user_data['unit'] = unit
+        context.chat_data['phase'] = 'wall_width'
+        await query.edit_message_text(f"Введите ширину стены ({unit}):")
+    elif action == 'choose_length':
+        if len(parts) < 2:
+            await query.answer("Ошибка выбора.")
+            return
+        choice = parts[1]
+        item = context.chat_data['current_item']
+        if choice == 'original':
+            chosen_length = item['length']
+        elif choice == 'suggested':
+            if 'suggested_length' not in context.chat_data:
+                await query.answer("Нет предложенного варианта.")
+                return
+            chosen_length = context.chat_data['suggested_length']
+            del context.chat_data['suggested_length']
+        else:
+            await query.answer("Неверный выбор.")
+            return
+        item['length'] = chosen_length
+        panel_h_m = chosen_length / 1000.0
+        height = context.chat_data['wall_height_m']
+        tolerance = 0.05
+        if abs(height - panel_h_m) <= tolerance:
+            await query.edit_message_text("Отлично, высоты совпадают! Есть окна? (Да/Нет)", reply_markup=build_yes_no_keyboard("okno|yes", "okno|no"))
+            context.chat_data['phase'] = 'okno'
+        else:
+            mode_text = f"Высота панели: {panel_h_m:.1f} м\nВысота помещения: {height:.1f} м\n\nКак рассчитать?"
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("По высоте панели (обрезать стену)", callback_data="calc_mode|panel")],
+                [InlineKeyboardButton("По высоте помещения (стыковать панели)", callback_data="calc_mode|room")],
+            ])
+            await query.edit_message_text(mode_text, reply_markup=kb)
+            context.chat_data['phase'] = 'calc_mode'
+    elif action == 'calc_mode':
+        mode = parts[1]
+        context.chat_data['calc_mode'] = mode
+        await query.edit_message_text("Есть окна? (Да/Нет)", reply_markup=build_yes_no_keyboard("okno|yes", "okno|no"))
+        context.chat_data['phase'] = 'okno'
+    elif action == 'add_another':
+        if parts[1] == 'yes':
+            context.chat_data['phase'] = 'select_cat'
+            await query.edit_message_text("Выберите категорию для следующего материала:", reply_markup=build_calc_category_keyboard())
+        else:
+            # Show full summary
+            completed = context.chat_data.get('completed_calcs', [])
+            if completed:
+                full_text = "\n\n".join([text for text, _ in completed])
+                total_cost = sum(cost for _, cost in completed)
+                full_text += f"\n\n🎉 Общая стоимость всех материалов: {total_cost:,} ₽"
+                await query.edit_message_text(full_text)
+                stats = load_stats()
+                stats['calc_count'] += 1
+                stats['calc_today'] += 1
+                save_stats(stats)
+            else:
+                await query.edit_message_text("Расчёт не завершён. Добавьте хотя бы один материал.")
+            # Reset
+            context.chat_data['phase'] = None
+            await context.bot.send_message(query.message.chat_id, "Расчёт завершён! Вернуться в меню?", reply_markup=build_main_menu_keyboard())
+    elif action == 'back':
+        await query.edit_message_text("Главное меню:", reply_markup=build_main_menu_keyboard())
+    elif action == 'admin':
+        sub = parts[1]
+        if sub == 'stats':
+            stats = load_stats()
+            text = f"Пользователей сегодня: {len(stats['users_today'])}\nРасчётов сегодня: {stats['calc_today']}\nВсего пользователей: {len(stats['users'])}\nВсего расчётов: {stats['calc_count']}"
+            await query.edit_message_text(text)
+        elif sub == 'broadcast':
+            context.chat_data['phase'] = 'broadcast'
+            await query.edit_message_text("Введите текст для рассылки в группу:")
+    elif action == 'partner_role':
+        role_map = {
+            'retail': 'Розничный магазин',
+            'installer': 'Монтажная бригада',
+            'designer': 'Дизайнер/Архитектор',
+            'other': 'Другое'
+        }
+        role = role_map.get(parts[1], 'Не указано')
+        context.chat_data['partner_role'] = role
+        context.chat_data['phase'] = 'partner_message'
+        await query.edit_message_text("Расскажите подробнее о вашем бизнесе или вопросе:")
+    # Окна/двери (на русском)
+    elif action.startswith('okno') or action.startswith('dver'):
+        phase_key = 'windows' if action.startswith('okno') else 'doors'
+        if parts[1] == 'yes':
+            context.chat_data['current_opening_type'] = phase_key  # Запоминаем тип (окно или дверь)
+            context.chat_data['phase'] = 'opening_width'
+            unit = context.user_data.get('unit', 'm')
+            opening_single = "окна" if phase_key == 'windows' else "двери"
+            await query.edit_message_text(f"Введите ширину {opening_single[:-1]} (в {unit}):")
+        else:
+            next_action = 'dver' if action.startswith('okno') else 'finish_calc'
+            if next_action == 'finish_calc':
+                # Calculate current item
+                item = context.chat_data['current_item']
+                width = context.chat_data['wall_width_m']
+                height = context.chat_data['wall_height_m']
+                deduct = context.chat_data.get('deduct_area', 0.0)
+                unit = context.user_data.get('unit', 'm')
+                calc_mode = context.chat_data.get('calc_mode')
+                panel_h_m = item.get('length', 0) / 1000 if item['category'] == 'walls' else None
+                result_text, cost = calculate_item(item, width, height, deduct, unit, calc_mode, panel_h_m)
+                context.chat_data['completed_calcs'].append((result_text, cost))
+                await query.edit_message_text(result_text, parse_mode=ParseMode.HTML)
+                await context.bot.send_message(query.message.chat_id, "Добавить ещё материал?", reply_markup=build_add_another_keyboard())
+                context.chat_data['phase'] = None
+            else:
+                await query.edit_message_text("Есть двери? (Да/Нет)", reply_markup=build_yes_no_keyboard("dver|yes", "dver|no"))
+    elif action == 'calc_type':
+        calc_type = parts[1]
+        if calc_type == 'room':
+            await proceed_to_wall_input(query, context)
+        elif calc_type == 'panels':
+            context.chat_data['phase'] = 'panels_count'
+            await query.edit_message_text("Введите количество панелей:")
+
+async def proceed_to_wall_input(query, context):
+    unit = context.user_data.get('unit')
+    if unit:
+        context.chat_data['phase'] = 'wall_width'
+        await query.edit_message_text(f"Введите ширину стены ({unit}):")
+    else:
+        context.chat_data['phase'] = 'units'
+        await query.edit_message_text("В каких единицах удобнее работать?", reply_markup=build_units_keyboard())
+
+# ============================
+#   MESSAGE HANDLER
+# ============================
+
+async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    phase = context.chat_data.get('phase')
+
+    if phase == 'partner_name':
+        context.chat_data['partner_name'] = text
+        context.chat_data['phase'] = 'partner_city'
+        await update.message.reply_text("В каком городе вы работаете?")
+    elif phase == 'partner_city':
+        context.chat_data['partner_city'] = text
+        context.chat_data['phase'] = 'partner_phone'
+        await update.message.reply_text("Введите ваш контактный телефон (для связи):")
+    elif phase == 'partner_phone':
+        context.chat_data['partner_phone'] = text
+        context.chat_data['phase'] = 'partner_role'
+        await update.message.reply_text("Какой у вас тип партнёрства?", reply_markup=build_partner_role_keyboard())
+    elif phase == 'partner_message':
+        context.chat_data['partner_message'] = text
+        # Send to admin
+        partner_data = {
+            'name': context.chat_data.get('partner_name'),
+            'city': context.chat_data.get('partner_city'),
+            'phone': context.chat_data.get('partner_phone'),
+            'role': context.chat_data.get('partner_role'),
+            'message': text
+        }
+        username = update.effective_user.username
+        username_str = f"@{username}" if username else "Без никнейма"
+        msg = f"Новая заявка партнёра от {username_str}:\n👤 Имя: {partner_data['name']}\n🏙️ Город: {partner_data['city']}\n📱 Тел: {partner_data['phone']}\n🔹 Роль: {partner_data['role']}\n💬 Сообщение: {partner_data['message']}"
+        await context.bot.send_message(ADMIN_CHAT_ID, msg)
+        await update.message.reply_text("Спасибо! Менеджер свяжется с вами в ближайшее время.\n\n😊 Добро пожаловать в команду ECO Стены!", reply_markup=build_main_menu_keyboard())
+        # Reset
+        context.chat_data['phase'] = None
+    elif phase == 'custom_name':
+        item = context.chat_data['current_item']
+        item['custom_name'] = text
+        context.chat_data['current_item'] = item
+        await update.message.reply_text("Как рассчитать?", reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("По размерам помещения", callback_data="calc_type|room")],
+            [InlineKeyboardButton("По количеству панелей", callback_data="calc_type|panels")],
+        ]))
+    elif phase == 'profile_qty':
+        try:
+            qty = int(text)
+            item = {'category': 'profiles', 'thickness': context.chat_data['thickness'], 'type': context.chat_data['profile_type'], 'quantity': qty}
+            width = context.chat_data.get('wall_width_m', 0)  # For profiles, assume wall width if set, else prompt? But for simplicity, proceed to calc assuming qty is total
+            height = context.chat_data.get('wall_height_m', 0)
+            deduct = context.chat_data.get('deduct_area', 0)
+            unit = context.user_data.get('unit', 'm')
+            result_text, cost = calculate_item(item, width or 1, height or 1, deduct, unit)
+            context.chat_data['completed_calcs'].append((result_text, cost))
+            await update.message.reply_text(result_text + "\n\nДобавить ещё материал?", reply_markup=build_add_another_keyboard())
+            context.chat_data['phase'] = None
+        except:
+            await update.message.reply_text("Непонял количество. Попробуйте заново.")
+    elif phase == 'wall_width':
+        width = parse_size(text, context.user_data.get('unit', 'm'))
+        if width <= 0:
+            await update.message.reply_text("Неверное значение. Введите ширину заново:")
+            return
+        context.chat_data['wall_width_m'] = width
+        context.chat_data['phase'] = 'wall_height'
+        await update.message.reply_text(f"Введите высоту стены ({context.user_data.get('unit', 'm')}):")
+    elif phase == 'wall_height':
+        height = parse_size(text, context.user_data.get('unit', 'm'))
+        if height <= 0:
+            await update.message.reply_text("Неверное значение. Введите высоту заново:")
+            return
+        context.chat_data['wall_height_m'] = height
+
+        # Проверка на WPC панели и уточнение длины/режима расчёта
+        if 'current_item' in context.chat_data and context.chat_data['current_item']['category'] == 'walls':
+            item = context.chat_data['current_item']
+            current_length = item['length']
+            panel_h_m = current_length / 1000.0
+            tolerance = 0.05  # 5 см
+            if abs(height - panel_h_m) > tolerance:
+                available_lengths = sorted(item['available_lengths'])
+                candidates = [l for l in available_lengths if l / 1000.0 >= height]
+                if candidates:
+                    suggested_length = min(candidates, key=lambda l: l / 1000.0)
+                else:
+                    suggested_length = max(available_lengths)
+                if suggested_length != current_length:
+                    context.chat_data['suggested_length'] = suggested_length
+                    current_text = f"{current_length} мм ({current_length/1000.0:.1f} м)"
+                    suggest_m = suggested_length / 1000.0
+                    suggest_text = f"{suggested_length} мм ({suggest_m:.1f} м)"
+                    if not candidates:
+                        suggest_text += " (максимальная доступная)"
+                    text = f"Высота выбранной панели: {panel_h_m:.1f} м\nВысота помещения: {height:.1f} м\n\n💡 Рекомендую панель высотой {suggest_text} для лучшего совпадения и минимизации отходов."
+                    kb = InlineKeyboardMarkup([
+                        [InlineKeyboardButton(f"Оставить {current_text}", callback_data="choose_length|original")],
+                        [InlineKeyboardButton(f"Выбрать {suggest_text}", callback_data="choose_length|suggested")],
+                    ])
+                    await update.message.reply_text(text, reply_markup=kb)
+                    context.chat_data['phase'] = 'choose_length'
+                    return
+                # Если suggested == current, то сразу к режиму
+                text = f"Высота панели: {panel_h_m:.1f} м\nВысота помещения: {height:.1f} м\n\nКак рассчитать площадь?"
+                kb = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("По высоте панели (обрезать стену)", callback_data="calc_mode|panel")],
+                    [InlineKeyboardButton("По высоте помещения (стыковать панели)", callback_data="calc_mode|room")],
+                ])
+                await update.message.reply_text(text, reply_markup=kb)
+                context.chat_data['phase'] = 'calc_mode'
+                return
+
+        # Если совпадение или не WPC — сразу к окнам
+        context.chat_data['phase'] = 'okno'
+        context.chat_data['windows'] = []
+        context.chat_data['doors'] = []
+        context.chat_data['deduct_area'] = 0.0
+        await update.message.reply_text("Есть окна? (Да/Нет)", reply_markup=build_yes_no_keyboard("okno|yes", "okno|no"))
+    elif phase == 'opening_width':
+        w = parse_size(text, context.user_data.get('unit', 'm'))
+        if w <= 0:
+            await update.message.reply_text("Неверное значение. Введите ширину заново:")
+            return
+        context.chat_data['temp_opening_width'] = w
+        context.chat_data['phase'] = 'opening_height'
+        opening_single = "окна" if context.chat_data['current_opening_type'] == 'windows' else "двери"
+        await update.message.reply_text(f"Введите высоту {opening_single[:-1]} (в {context.user_data.get('unit', 'm')}):")
+    elif phase == 'opening_height':
+        h = parse_size(text, context.user_data.get('unit', 'm'))
+        if h <= 0:
+            await update.message.reply_text("Неверное значение. Введите высоту заново:")
+            return
+        area = context.chat_data['temp_opening_width'] * h
+        phase_key = context.chat_data['current_opening_type']
+        context.chat_data[phase_key].append(area)
+        context.chat_data['deduct_area'] += area
+        if phase_key == 'windows':
+            added_text = "Окно добавлено"
+            more_text = "окно"
+            yes_data = "okno|yes"
+            no_data = "okno|no"
+        else:
+            added_text = "Дверь добавлена"
+            more_text = "дверь"
+            yes_data = "dver|yes"
+            no_data = "dver|no"
+        await update.message.reply_text(f"{added_text}. Ещё {more_text}? (Да/Нет)", reply_markup=build_yes_no_keyboard(yes_data, no_data))
+        context.chat_data['phase'] = None  # Reset temp
+    elif phase == 'broadcast':
+        # Send to group
+        await context.bot.send_message(TG_GROUP, text)
+        await update.message.reply_text("Рассылка отправлена!")
+        context.chat_data['phase'] = None
+    elif phase == 'panels_count':
+        try:
+            panels = int(text)
+            if panels <= 0:
+                raise ValueError
+            item = context.chat_data['current_item']
+            item['known_panels'] = panels
+            result_text, cost = calculate_item(item, 0, 0, 0, 'm')
+            context.chat_data['completed_calcs'].append((result_text, cost))
+            await update.message.reply_text(result_text, parse_mode=ParseMode.HTML)
+            await context.bot.send_message(update.message.chat_id, "Добавить ещё материал?", reply_markup=build_add_another_keyboard())
+            context.chat_data['phase'] = None
+            stats = load_stats()
+            stats['calc_count'] += 1
+            stats['calc_today'] += 1
+            save_stats(stats)
+        except:
+            await update.message.reply_text("Неверное количество. Введите заново:")
+    else:
+        # Default
+        await update.message.reply_text("Используйте кнопки меню для расчёта или напишите /start")
+
+# ============================
+#   PHOTO HANDLER (НОВИНКА)
+# ============================
+
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(
+        "Спасибо за фото! Это поможет мне лучше понять ваш проект. "
+        "Опишите размеры комнаты или используйте кнопки меню для расчёта материалов. "
+        "Если нужно, я могу отправить фото менеджеру для консультации.",
         reply_markup=build_main_menu_keyboard()
     )
+    # Опционально: сохранить фото или отправить админу
+    # photo = await update.message.photo[-1].get_file()
+    # await context.bot.send_photo(ADMIN_CHAT_ID, photo.file_id, caption=f"Фото от {update.effective_user.first_name}")
 
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-    user_id = query.from_user.id
+# ============================
+#   REGISTRATION
+# ============================
 
-    logger.info(f"Button clicked by user {user_id}: data='{data}'")  # DEBUG LOG
+# Initialize application once at startup (sync)
+asyncio.run(tg_application.initialize())
 
-    try:
-        # Фикс: Для фото — удаляем и отправляем новое; для текста — редактируем
-        if query.message.photo:
-            await query.message.delete()
-            logger.info("Deleted photo message")
-            # Отправляем новое сообщение
-            new_msg = await query.message.reply_text("Обработка завершена.")  # Placeholder, но сразу заменим ниже
-            logger.info("Replied new text after photo delete")
-        else:
-            # Для текста: редактируем
-            await query.edit_message_text(text="Обработка завершена.")  # Placeholder
-            logger.info("Edited text message")
-
-        if data == "main|calc":
-            text = "Выберите категорию для расчёта:"
-            markup = build_calc_category_keyboard()
-            if query.message.photo:
-                await new_msg.edit_text(text=text, reply_markup=markup)
-                logger.info("Handled main|calc (photo -> new text)")
-            else:
-                await query.edit_message_text(text=text, reply_markup=markup)
-                logger.info("Handled main|calc (text edit)")
-            return
-
-        if data == "main|info":
-            text = "Информация о компании: ECO Стены — премиум WPC панели для интерьера. Подробнее в каталоге."
-            markup = build_main_menu_keyboard()
-            if query.message.photo:
-                await new_msg.edit_text(text=text, reply_markup=markup)
-                logger.info("Handled main|info (photo -> new text)")
-            else:
-                await query.edit_message_text(text=text, reply_markup=markup)
-                logger.info("Handled main|info (text edit)")
-            return
-
-        if data == "main|catalogs":
-            text = f"Каталоги: Загрузите PDF или свяжитесь с нами в {TG_GROUP}."
-            markup = build_main_menu_keyboard()
-            if query.message.photo:
-                await new_msg.edit_text(text=text, reply_markup=markup)
-                logger.info("Handled main|catalogs (photo -> new text)")
-            else:
-                await query.edit_message_text(text=text, reply_markup=markup)
-                logger.info("Handled main|catalogs (text edit)")
-            return
-
-        if data == "main|presentation":
-            text = f"Презентация: [Скачать PDF]({PRESENTATION_URL})"
-            markup = build_main_menu_keyboard()
-            if query.message.photo:
-                await new_msg.edit_text(text=text, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
-                logger.info("Handled main|presentation (photo -> new text)")
-            else:
-                await query.edit_message_text(text=text, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
-                logger.info("Handled main|presentation (text edit)")
-            return
-
-        if data == "main|contacts":
-            text = "Контакты: @ecosteni | Тел: +7 (XXX) XXX-XX-XX | Email: info@ecosteni.ru"
-            markup = build_main_menu_keyboard()
-            if query.message.photo:
-                await new_msg.edit_text(text=text, reply_markup=markup)
-                logger.info("Handled main|contacts (photo -> new text)")
-            else:
-                await query.edit_message_text(text=text, reply_markup=markup)
-                logger.info("Handled main|contacts (text edit)")
-            return
-
-        if data == "main|partner":
-            text = "Стать партнёром: Напишите в {TG_GROUP} для деталей."
-            markup = build_main_menu_keyboard()
-            if query.message.photo:
-                await new_msg.edit_text(text=text, reply_markup=markup)
-                logger.info("Handled main|partner (photo -> new text)")
-            else:
-                await query.edit_message_text(text=text, reply_markup=markup)
-                logger.info("Handled main|partner (text edit)")
-            return
-
-        if data == "main|admin" and user_id == ADMIN_CHAT_ID:
-            text = "Админ-панель: Статистика - /stats (в чате)."
-            markup = build_main_menu_keyboard()
-            if query.message.photo:
-                await new_msg.edit_text(text=text, reply_markup=markup)
-                logger.info("Handled main|admin (photo -> new text)")
-            else:
-                await query.edit_message_text(text=text, reply_markup=markup)
-                logger.info("Handled main|admin (text edit)")
-            return
-
-        if data == "calc|wall":
-            text = "Выберите тип панели:"
-            markup = build_wall_type_keyboard()
-            if query.message.photo:
-                await new_msg.edit_text(text=text, reply_markup=markup)
-                logger.info("Handled calc|wall (photo -> new text)")
-            else:
-                await query.edit_message_text(text=text, reply_markup=markup)
-                logger.info("Handled calc|wall (text edit)")
-            return
-
-        parts = data.split('|')
-        if parts[0] == "calc_type" and len(parts) == 2:
-            type_name = parts[1]
-            context.user_data['calc_type'] = type_name
-            thicknesses = list(WALL_PRODUCTS[type_name].keys())
-            text = f"Выбрано: {type_name}. Выберите толщину:"
-            markup = build_thickness_keyboard(thicknesses)
-            if query.message.photo:
-                await new_msg.edit_text(text=text, reply_markup=markup)
-                logger.info(f"Handled calc_type|{type_name} (photo -> new text)")
-            else:
-                await query.edit_message_text(text=text, reply_markup=markup)
-                logger.info(f"Handled calc_type|{type_name} (text edit)")
-            return
-
-        if parts[0] == "thickness" and len(parts) == 2:
-            thickness = int(parts[1])
-            type_name = context.user_data['calc_type']
-            product = WALL_PRODUCTS[type_name][thickness]
-            context.user_data['calc_product'] = product
-            context.user_data['calc_thickness'] = thickness
-            # НОВОЕ: Выбор метода расчёта
-            text = f"Выбрано: {type_name}, {thickness} мм.\n\nКак рассчитать количество?"
-            markup = build_method_keyboard()
-            if query.message.photo:
-                await new_msg.edit_text(text=text, reply_markup=markup)
-                logger.info(f"Handled thickness|{thickness} (photo -> new text)")
-            else:
-                await query.edit_message_text(text=text, reply_markup=markup)
-                logger.info(f"Handled thickness|{thickness} (text edit)")
-            return
-
-        # НОВОЕ: Обработка метода расчёта
-        if parts[0] == "calc_method" and len(parts) == 2:
-            method = parts[1]
-            context.user_data['calc_method'] = method
-            product = context.user_data['calc_product']
-            if method == "room":
-                text = "Введите размеры помещения: длина (м), ширина (м), высота (м).\nФормат: 5, 4, 2.7\n(Это площадь стен без окон/дверей)"
-                markup = build_back_button()
-                context.user_data['waiting_for'] = 'room_dimensions'
-                logger.info("Handled calc_method|room")
-            else:  # panels
-                text = "Выберите длину панели:"
-                markup = build_length_keyboard(product['panels'])
-                logger.info("Handled calc_method|panels")
-            if query.message.photo:
-                await new_msg.edit_text(text=text, reply_markup=markup)
-            else:
-                await query.edit_message_text(text=text, reply_markup=markup)
-            return
-
-        if parts[0] == "calc_length" and len(parts) == 2:
-            length = int(parts[1])
-            context.user_data['calc_length'] = length
-            text = "Сколько таких панелей нужно? Введите число:"
-            markup = build_back_button()
-            context.user_data['waiting_for'] = 'panel_count'
-            if query.message.photo:
-                await new_msg.edit_text(text=text, reply_markup=markup)
-                logger.info(f"Handled calc_length|{length} (photo -> new text)")
-            else:
-                await query.edit_message_text(text=text, reply_markup=markup)
-                logger.info(f"Handled calc_length|{length} (text edit)")
-            return
-
-        # Пример обработки back
-        if data.startswith("back|"):
-            text = "Главное меню:"
-            markup = build_main_menu_keyboard()
-            if 'waiting_for' in context.user_data:
-                del context.user_data['waiting_for']
-            if query.message.photo:
-                await new_msg.edit_text(text=text, reply_markup=markup)
-                logger.info("Handled back (photo -> new text)")
-            else:
-                await query.edit_message_text(text=text, reply_markup=markup)
-                logger.info("Handled back (text edit)")
-            return
-
-        # Fallback для необработанных
-        text = "Кнопка не распознана. Попробуйте /start."
-        markup = build_main_menu_keyboard()
-        if query.message.photo:
-            await new_msg.edit_text(text=text, reply_markup=markup)
-        else:
-            await query.edit_message_text(text=text, reply_markup=markup)
-        logger.warning(f"Unrecognized button data: {data}")
-
-    except Exception as e:
-        logger.error(f"Error in button_handler for data '{data}': {e}")
-        fallback_text = "Произошла ошибка. Попробуйте /start заново."
-        fallback_markup = build_main_menu_keyboard()
-        try:
-            if query.message.photo:
-                await query.message.reply_text(fallback_text, reply_markup=fallback_markup)
-            else:
-                await query.edit_message_text(text=fallback_text, reply_markup=fallback_markup)
-        except Exception as e2:
-            logger.error(f"Failed fallback edit/reply: {e2}")
-            # Ultimate fallback: send new
-            await context.bot.send_message(chat_id=query.from_user.id, text=fallback_text, reply_markup=fallback_markup)
-
-async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    text = update.message.text
-    user_data = context.user_data
-    if 'waiting_for' not in user_data:
-        return
-
-    waiting = user_data['waiting_for']
-    product = user_data['calc_product']
-    thickness = user_data['calc_thickness']
-    method = user_data.get('calc_method', 'room')  # По умолчанию room
-
-    logger.info(f"Message received for waiting '{waiting}': {text[:50]}...")  # DEBUG
-
-    try:
-        if waiting == 'room_dimensions':
-            dims = [float(x.strip()) for x in text.split(',')]
-            if len(dims) != 3:
-                raise ValueError
-            length, width, height = dims
-            area_m2 = 2 * (length + width) * height  # Площадь стен
-            # Выбор длины
-            lengths_keyboard = build_length_keyboard(product['panels'])
-            await update.message.reply_text(
-                f"Площадь стен: {area_m2:.2f} м².\nВыберите длину панели для расчёта:",
-                reply_markup=lengths_keyboard
-            )
-            user_data['calc_area'] = area_m2
-            user_data['waiting_for'] = 'length_choice_after_room'  # Переходим к выбору длины
-            return
-
-        elif waiting == 'panel_count':
-            count = int(text)
-            length = user_data['calc_length']
-            panel_info = product['panels'][length]
-            total_area = count * panel_info['area_m2']
-            total_price = count * panel_info['price_rub']
-            total_weight = total_area * product['weight_per_m2']
-            # Сохраняем статистику
-            stats = load_stats()
-            stats['calc_count'] += 1
-            stats['calc_today'] += 1
-            save_stats(stats)
-            # Результат
-            result_text = (
-                f"Расчёт для {count} панелей длиной {length} мм:\n"
-                f"• Площадь покрытия: {total_area:.2f} м²\n"
-                f"• Стоимость: {total_price:,} руб.\n"
-                f"• Вес панелей: {total_weight:.1f} кг\n\n"
-                f"Нужны профили? Или другой расчёт?"
-            )
-            await update.message.reply_text(result_text, reply_markup=build_main_menu_keyboard())
-            # Очистка
-            user_data.clear()
-            return
-
-        elif waiting == 'length_choice_after_room':
-            # Для message fallback (но лучше кнопки); парсим как calc_length callback
-            length = int(text)  # Если ввод числа
-            if length not in product['panels']:
-                raise ValueError
-            area = user_data['calc_area']
-            panel_info = product['panels'][length]
-            num_panels = math.ceil(area / panel_info['area_m2'])
-            total_area = num_panels * panel_info['area_m2']
-            total_price = num_panels * panel_info['price_rub']
-            total_weight = total_area * product['weight_per_m2']
-            # Статистика
-            stats = load_stats()
-            stats['calc_count'] += 1
-            stats['calc_today'] += 1
-            save_stats(stats)
-            # Результат (добавлен вес)
-            result_text = (
-                f"Для площади {area:.2f} м² нужно {num_panels} панелей длиной {length} мм:\n"
-                f"• Площадь покрытия: {total_area:.2f} м²\n"
-                f"• Стоимость: {total_price:,} руб.\n"
-                f"• Вес панелей: {total_weight:.1f} кг\n\n"
-                f"Учитывайте +10% на подрезку. Нужны профили?"
-            )
-            await update.message.reply_text(result_text, reply_markup=build_main_menu_keyboard())
-            user_data.clear()
-            return
-
-        # ... (другие waiting_for для профилей, реек и т.д. остаются)
-
-    except ValueError:
-        if waiting == 'room_dimensions':
-            await update.message.reply_text("Неверный формат. Попробуйте: 5, 4, 2.7")
-        elif waiting == 'panel_count':
-            await update.message.reply_text("Введите целое число панелей.")
-        elif waiting == 'length_choice_after_room':
-            await update.message.reply_text("Выберите длину из кнопок или введите число из доступных (2440, 2600 и т.д.).")
-    except Exception as e:
-        logger.error(f"Error in message_handler for waiting '{waiting}': {e}")
-        await update.message.reply_text("Ошибка в расчёте. Попробуйте заново.", reply_markup=build_main_menu_keyboard())
-
-# Error handler для всего приложения
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.warning(f"Update {getattr(update, 'update_id', 'N/A')} caused error {context.error}")
-    # Фикс: Всегда отправляем новое сообщение (не edit)
-    if update and hasattr(update, 'effective_chat') and update.effective_chat:
-        try:
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text="Произошла ошибка. Попробуйте /start заново.",
-                reply_markup=build_main_menu_keyboard()
-            )
-        except Exception as e2:
-            logger.error(f"Failed to send fallback to user: {e2}")
-    # Админу
-    try:
-        await context.bot.send_message(
-            chat_id=ADMIN_CHAT_ID,
-            text=f"Ошибка: {context.error}\nUpdate ID: {getattr(update, 'update_id', 'N/A')}"
-        )
-    except:
-        pass
-
-# Регистрация обработчиков (ДО init!)
 tg_application.add_handler(CommandHandler("start", start))
-tg_application.add_handler(CallbackQueryHandler(button_handler))
+tg_application.add_handler(CallbackQueryHandler(callback_handler))
 tg_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
-tg_application.add_error_handler(error_handler)
+tg_application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
 # ============================
-#   TELEGRAM APP INIT/SHUTDOWN
+#   WEBHOOK SETUP WITH DEBUG
 # ============================
 
-async def init_telegram_app():
-    """Инициализация Telegram Application."""
-    loop = get_event_loop()
-    await tg_application.initialize()
-    logger.info("Telegram Application initialized successfully.")
-
-async def shutdown_telegram_app():
-    """Shutdown Telegram Application."""
-    loop = get_event_loop()
-    await tg_application.shutdown()
-    logger.info("Telegram Application shut down.")
-
-# Вызов init при запуске
-def startup():
-    loop = get_event_loop()
-    loop.run_until_complete(init_telegram_app())
-
-# Регистрация shutdown
-atexit.register(lambda: asyncio.run(shutdown_telegram_app()))
-
-# ============================
-#   FLASK ROUTES (WEBHOOK)
-# ============================
-
-@app.route('/', methods=['GET', 'HEAD'])
-def index():
-    """Health-check для Render."""
-    return jsonify({"status": "OK"}), 200
-
-@app.route(f'/{TG_BOT_TOKEN}', methods=['POST'])
-def webhook():
-    """Telegram webhook handler."""
+async def setup_webhook(application: Application, webhook_url: str):
+    # Ждём стабилизации loop (фикс для RuntimeError)
+    await asyncio.sleep(0.1)
+    
+    # Сначала удаляем старый webhook, чтобы очистить last_error
     try:
-        json_data = request.get_json(force=True)
-        if not json_data:
-            logger.warning("Empty JSON in webhook")
-            return jsonify({"status": "Empty update"}), 200
+        await application.bot.delete_webhook(drop_pending_updates=True)
+        logger.info("Old webhook deleted, pending updates dropped.")
+    except (TelegramError, RuntimeError) as e:
+        logger.warning(f"Failed to delete old webhook: {e} (may not exist)")
 
-        update = Update.de_json(json_data, tg_application.bot)
-        if update:
-            if update.callback_query:
-                logger.info(f"Received callback_query from user {update.callback_query.from_user.id}, data='{update.callback_query.data}'")  # DEBUG
-            loop = get_event_loop()
-            loop.run_until_complete(tg_application.process_update(update))
-            logger.info(f"Processed update: {update.update_id}")
-        else:
-            logger.warning("Invalid update JSON")
-        return jsonify({"status": "OK"}), 200
-    except TelegramError as e:
-        logger.error(f"Telegram error in webhook: {e}")
-        return jsonify({"status": "Error", "message": str(e)}), 500
-    except Exception as e:
-        logger.error(f"Unexpected error in webhook: {e}")
-        return jsonify({"status": "Error", "message": str(e)}), 500
+    webhook_path = f"{webhook_url}/{TG_BOT_TOKEN}"
+    await application.bot.set_webhook(url=webhook_path)
+    logger.info(f"New webhook set to: {webhook_path}")
+
+    # Check webhook info
+    info = await application.bot.get_webhook_info()
+    logger.info(f"Webhook info: url={info.url}, pending_updates={info.pending_update_count}, last_error={info.last_error_date}")
+
+@app.route("/", methods=["GET"])
+def health():
+    return "OK", 200
+
+@app.route(f"/{TG_BOT_TOKEN}", methods=["GET", "POST"])
+def webhook():
+    if request.method == "GET":
+        # Игнорируем GET (health check или probe) — просто OK
+        return jsonify({"ok": True, "method": "GET"}), 200
+    
+    if request.method == "POST":
+        try:
+            update_json = request.get_json()
+            logger.info(f"Received update: {json.dumps(update_json, indent=2)[:200]}...")
+            if update_json:
+                update = Update.de_json(update_json, tg_application.bot)
+                loop = get_event_loop()
+                loop.run_until_complete(tg_application.process_update(update))
+                return jsonify({"ok": True})
+            else:
+                logger.warning("Empty update received")
+                return jsonify({"ok": False}), 400
+        except Exception as e:
+            logger.error(f"Error processing update: {e}")
+            return jsonify({"ok": False, "error": str(e)}), 500
+
+# ============================
+#   MAIN
+# ============================
+
+def main():
+    port = int(os.getenv("PORT", 8443))
+    webhook_url = os.getenv("WEBHOOK_URL")
+    if webhook_url:
+        # Setup webhook in async context
+        loop = get_event_loop()
+        loop.run_until_complete(setup_webhook(tg_application, webhook_url))
+        logger.info("Starting Flask server with webhook mode")
+        app.run(host="0.0.0.0", port=port, debug=False)
+    else:
+        logger.info("No WEBHOOK_URL, starting polling")
+        asyncio.run(tg_application.run_polling())
 
 if __name__ == "__main__":
-    # Инициализация при запуске
-    startup()
-    # Для локального запуска (используй ngrok для теста webhook)
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    main()
