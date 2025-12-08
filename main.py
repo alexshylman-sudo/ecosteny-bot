@@ -304,10 +304,9 @@ def build_calc_category_keyboard() -> InlineKeyboardMarkup:
     rows += build_back_button("В главное меню")
     return InlineKeyboardMarkup(rows)
 
-def build_wall_product_keyboard(is_spc=False) -> InlineKeyboardMarkup:
+def build_wall_product_keyboard() -> InlineKeyboardMarkup:
     buttons = []
-    codes = PRODUCT_CODES if not is_spc else {"spc_panel": "SPC Панель"}
-    for code, title in codes.items():
+    for code, title in PRODUCT_CODES.items():
         buttons.append([InlineKeyboardButton(text=title, callback_data=f"product|{code}")])
     buttons += build_back_button("Назад")
     return InlineKeyboardMarkup(buttons)
@@ -489,7 +488,7 @@ def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit, calc
         result_text = f"""Выбранный материал: {title}  
 Толщина: {thickness} мм  
 Высота: {length_mm} мм {mode_text}  
-Название/артикул клиента: **«{custom_name}»**  
+Название/артикул клиента: <b>«{custom_name}»</b>  
 
 🔹 Ширина зоны отделки: {width_mm:.1f} мм (или {width_m:.2f} м)  
 🔹 Площадь зоны отделки: {width_m:.2f} м × {eff_h:.1f} м = {gross_area:.2f} м²  
@@ -710,7 +709,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 full_text = "\n\n".join([text for text, _ in completed])
                 total_cost = sum(cost for _, cost in completed)
                 full_text += f"\n\n🎉 Общая стоимость всех материалов: {total_cost:,} ₽"
-                await query.edit_message_text(full_text, parse_mode=ParseMode.MARKDOWN)
+                await query.edit_message_text(full_text)
                 stats = load_stats()
                 stats['calc_count'] += 1
                 stats['calc_today'] += 1
@@ -758,13 +757,13 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 item = context.chat_data['current_item']
                 width = context.chat_data['wall_width_m']
                 height = context.chat_data['wall_height_m']
-                deduct = context.chat_data['deduct_area']
+                deduct = context.chat_data.get('deduct_area', 0.0)
                 unit = context.user_data.get('unit', 'm')
                 calc_mode = context.chat_data.get('calc_mode')
                 panel_h_m = item.get('length', 0) / 1000 if item['category'] == 'walls' else None
                 result_text, cost = calculate_item(item, width, height, deduct, unit, calc_mode, panel_h_m)
                 context.chat_data['completed_calcs'].append((result_text, cost))
-                await query.edit_message_text(result_text, parse_mode=ParseMode.MARKDOWN)
+                await query.edit_message_text(result_text, parse_mode=ParseMode.HTML)
                 await context.bot.send_message(query.message.chat_id, "Добавить ещё материал?", reply_markup=build_add_another_keyboard())
                 context.chat_data['phase'] = None
             else:
