@@ -383,6 +383,13 @@ def build_units_keyboard() -> InlineKeyboardMarkup:
     ]
     return InlineKeyboardMarkup(buttons)
 
+def build_slats_units_keyboard() -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton("Метры (м)", callback_data="slats_unit|m")],
+        [InlineKeyboardButton("Миллиметры (мм)", callback_data="slats_unit|mm")],
+    ]
+    return InlineKeyboardMarkup(buttons)
+
 def build_yes_no_keyboard(yes_data, no_data) -> InlineKeyboardMarkup:
     buttons = [
         [InlineKeyboardButton("Да", callback_data=yes_data)],
@@ -686,8 +693,10 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         slat_type = parts[1]
         item = {'category': 'slats', 'type': slat_type}
         context.chat_data['current_item'] = item
-        # Proceed to units or wall_width
-        await proceed_to_wall_input(query, context)
+        await query.edit_message_text("Как рассчитать?", reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("По размерам помещения", callback_data="calc_type|room")],
+            [InlineKeyboardButton("По количеству реечных панелей", callback_data="calc_type|slats")],
+        ]))
     elif action == '3d_size':
         var = parts[1]
         item = {'category': '3d', 'var': var}
@@ -699,6 +708,11 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['unit'] = unit
         context.chat_data['phase'] = 'wall_width'
         await query.edit_message_text(f"Введите ширину стены ({unit}):")
+    elif action == 'slats_unit':
+        unit = parts[1]
+        context.user_data['unit'] = unit
+        context.chat_data['phase'] = 'slats_length'
+        await query.edit_message_text(f"Введите длину одной рейки ({unit}):")
     elif action == 'choose_length':
         if len(parts) < 2:
             await query.answer("Ошибка выбора.")
@@ -813,6 +827,13 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif calc_type == 'panels':
             context.chat_data['phase'] = 'panels_count'
             await query.edit_message_text("Введите количество панелей:")
+        elif calc_type == 'slats':
+            unit = context.user_data.get('unit')
+            if not unit:
+                await query.edit_message_text("В каких единицах размер реечных панелей?", reply_markup=build_slats_units_keyboard())
+            else:
+                context.chat_data['phase'] = 'slats_length'
+                await query.edit_message_text(f"Введите длину одной рейки ({unit}):")
 
 async def proceed_to_wall_input(query, context):
     unit = context.user_data.get('unit')
@@ -986,6 +1007,42 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             result_text, cost = calculate_item(item, 0, 0, 0, 'm')
             context.chat_data['completed_calcs'].append((result_text, cost))
             await update.message.reply_text(result_text, parse_mode=ParseMode.HTML)
+            await context.bot.send_message(update.message.chat_id, "Добавить ещё материал?", reply_markup=build_add_another_keyboard())
+            context.chat_data['phase'] = None
+            stats = load_stats()
+            stats['calc_count'] += 1
+            stats['calc_today'] += 1
+            save_stats(stats)
+        except:
+            await update.message.reply_text("Неверное количество. Введите заново:")
+    elif phase == 'slats_length':
+        length = parse_size(text, context.user_data.get('unit', 'm'))
+        if length <= 0:
+            await update.message.reply_text("Неверное значение. Введите длину заново:")
+            return
+        context.chat_data['slats_length_m'] = length
+        context.chat_data['phase'] = 'slats_quantity'
+        await update.message.reply_text("Введите количество реечных панелей:")
+    elif phase == 'slats_quantity':
+        try:
+            quantity = int(text)
+            if quantity <= 0:
+                raise ValueError
+            item = context.chat_data['current_item']
+            length_m = context.chat_data['slats_length_m']
+            total_m = quantity * length_m
+            price_mp = SLAT_PRICES[item['type']]
+            cost = total_m * price_mp
+            type_name = 'WPC' if item['type'] == 'wpc' else 'Деревянные'
+            result_text = f"""
+Реечные панели: {type_name}
+Длина одной рейки: {length_m:.2f} м
+Количество: {quantity} шт.
+Общая длина: {total_m:.2f} м.п.
+💰 Стоимость: {cost:,} ₽
+"""
+            context.chat_data['completed_calcs'].append((result_text, cost))
+            await update.message.reply_text(result_text)
             await context.bot.send_message(update.message.chat_id, "Добавить ещё материал?", reply_markup=build_add_another_keyboard())
             context.chat_data['phase'] = None
             stats = load_stats()
