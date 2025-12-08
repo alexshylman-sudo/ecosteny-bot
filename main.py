@@ -832,10 +832,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             item = context.chat_data['current_item']
             panel_h_m = item['length'] / 1000
             tolerance = 0.1  # 10 см
-            if abs(wall_height - panel_h_m) > tolerance:
+            if abs(height - panel_h_m) > tolerance:
                 available_lengths = sorted(item['available_lengths'])
                 # Найти ближайшую доступную длину >= высоты помещения
-                candidates = [l for l in available_lengths if l / 1000 >= wall_height]
+                candidates = [l for l in available_lengths if l / 1000 >= height]
                 if candidates:
                     suggested_length = min(candidates, key=lambda l: l / 1000)
                     suggested_m = suggested_length / 1000
@@ -843,7 +843,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     suggest_text = "\n\n💡 Доступные высоты панелей не покрывают вашу высоту помещения полностью — рассмотрите стыковку или консультацию."
 
-                text = f"Высота выбранной панели: {panel_h_m} м\nВысота помещения: {wall_height} м{suggest_text}\n\nКак рассчитать площадь?"
+                text = f"Высота выбранной панели: {panel_h_m} м\nВысота помещения: {height} м{suggest_text}\n\nКак рассчитать площадь?"
                 kb = InlineKeyboardMarkup([
                     [InlineKeyboardButton("По высоте панели (обрезать стену)", callback_data="calc_mode|panel")],
                     [InlineKeyboardButton("По высоте помещения (стыковать панели)", callback_data="calc_mode|room")],
