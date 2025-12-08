@@ -116,6 +116,7 @@ WALL_PRODUCTS = {
     "WPC Бамбук угольный": {
         5: {
             "width_mm": 1220,
+            "weight_kg_per_m2": 4.0,
             "panels": {
                 2440: {"area_m2": 2.928, "price_rub": 10500},
                 2600: {"area_m2": 3.12, "price_rub": 11100},
@@ -126,6 +127,7 @@ WALL_PRODUCTS = {
         },
         8: {
             "width_mm": 1220,
+            "weight_kg_per_m2": 5.0,
             "panels": {
                 2440: {"area_m2": 2.928, "price_rub": 12200},
                 2600: {"area_m2": 3.12, "price_rub": 13000},
@@ -138,6 +140,7 @@ WALL_PRODUCTS = {
     "WPC Бамбук": {
         5: {
             "width_mm": 1220,
+            "weight_kg_per_m2": 4.0,
             "panels": {
                 2440: {"area_m2": 2.928, "price_rub": 12200},
                 2600: {"area_m2": 3.12, "price_rub": 13000},
@@ -148,6 +151,7 @@ WALL_PRODUCTS = {
         },
         8: {
             "width_mm": 1220,
+            "weight_kg_per_m2": 5.0,
             "panels": {
                 2440: {"area_m2": 2.928, "price_rub": 13900},
                 2600: {"area_m2": 3.12, "price_rub": 14900},
@@ -160,6 +164,7 @@ WALL_PRODUCTS = {
     "WPC повышенной плотности": {
         8: {
             "width_mm": 1220,
+            "weight_kg_per_m2": 5.6,
             "panels": {
                 2440: {"area_m2": 2.928, "price_rub": 15500},
                 2600: {"area_m2": 3.12, "price_rub": 16500},
@@ -172,6 +177,7 @@ WALL_PRODUCTS = {
     "WPC Бамбук с защитным слоем": {
         8: {
             "width_mm": 1220,
+            "weight_kg_per_m2": 6.0,
             "panels": {
                 2440: {"area_m2": 2.928, "price_rub": 16400},
                 2600: {"area_m2": 3.12, "price_rub": 17500},
@@ -184,6 +190,7 @@ WALL_PRODUCTS = {
     "WPC повышенной плотности с защитным слоем": {
         8: {
             "width_mm": 1220,
+            "weight_kg_per_m2": 8.0,
             "panels": {
                 2440: {"area_m2": 2.928, "price_rub": 18000},
                 2600: {"area_m2": 3.12, "price_rub": 19100},
@@ -455,6 +462,7 @@ def parse_size(text: str, unit: str) -> float:
 def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit, calc_mode=None, panel_h_m=None) -> tuple[str, int]:
     category = item['category']
     cost = 0
+    total_weight = 0.0
     if category == 'walls':
         title = PRODUCT_CODES[item['product_code']]
         thickness = item.get('thickness', 0)
@@ -482,6 +490,8 @@ def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit, calc
         waste_area = total_area - net_area
         waste_pct = (waste_area / total_area) * 100 if total_area > 0 else 0
         cost = panels * price
+        weight_per_m2 = WALL_PRODUCTS[title][thickness].get('weight_kg_per_m2', 0.0)
+        total_weight = total_area * weight_per_m2
         custom_name = item.get('custom_name', 'Стандартный')
         width_mm = wall_width_m * 1000
         width_m = wall_width_m
@@ -504,11 +514,13 @@ def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit, calc
 - Процент отходов: ({waste_area:.2f} м² ÷ {total_area:.1f} м²) × 100 ≈ {waste_pct:.2f}%  
 
 💰 Ориентировочная стоимость: {panels} панелей × {price:,} ₽ = {cost:,} ₽  
+🔹 Общий вес: {total_weight:.1f} кг  
 
 ____________________________________________________________  
 Итог:  
 - Необходимое количество панелей: {panels}  
 - Общая стоимость: {cost:,} ₽  
+- Общий вес: {total_weight:.1f} кг  
 - Отходы: {waste_area:.2f} м² ({waste_pct:.2f}%)"""
     elif category == 'profiles':
         thickness = item['thickness']
