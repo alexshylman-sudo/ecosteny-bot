@@ -18,6 +18,7 @@ from telegram import (
     InlineKeyboardMarkup,
     ParseMode,
 )
+from telegram.constants import ParseMode as ParseModeConst
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -782,7 +783,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 panel_h_m = item.get('length', 0) / 1000 if item['category'] == 'walls' else None
                 result_text, cost = calculate_item(item, width, height, deduct, unit, calc_mode, panel_h_m)
                 context.chat_data['completed_calcs'].append((result_text, cost))
-                await query.edit_message_text(result_text, parse_mode=ParseMode.HTML)
+                await query.edit_message_text(result_text, parse_mode=ParseModeConst.HTML)
                 await context.bot.send_message(query.message.chat_id, "Добавить ещё материал?", reply_markup=build_add_another_keyboard())
                 context.chat_data['phase'] = None
             else:
@@ -1044,17 +1045,21 @@ def webhook():
 # ============================
 
 def main():
-    port = int(os.getenv("PORT", 8443))
+    port = int(os.getenv("PORT", 10000))  # Render использует $PORT, fallback на 10000 для локального тестирования
     webhook_url = os.getenv("WEBHOOK_URL")
     if webhook_url:
-        # Setup webhook in async context
-        loop = get_event_loop()
-        loop.run_until_complete(setup_webhook(tg_application, webhook_url))
-        logger.info("Starting Flask server with webhook mode")
-        app.run(host="0.0.0.0", port=port, debug=False)
+        try:
+            # Setup webhook in async context
+            loop = get_event_loop()
+            loop.run_until_complete(setup_webhook(tg_application, webhook_url))
+            logger.info("Starting Flask server with webhook mode")
+        except Exception as e:
+            logger.error(f"Webhook setup failed: {e}. Starting server without webhook (use polling manually if needed).")
     else:
-        logger.info("No WEBHOOK_URL, starting polling")
-        asyncio.run(tg_application.run_polling())
+        logger.info("No WEBHOOK_URL set. Starting server without webhook. Set WEBHOOK_URL for production (e.g., https://your-app.onrender.com).")
+    
+    # Всегда запускаем Flask сервер для Render (bind to 0.0.0.0:$PORT)
+    app.run(host="0.0.0.0", port=port, debug=False)
 
 if __name__ == "__main__":
     main()
