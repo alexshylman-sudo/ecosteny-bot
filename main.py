@@ -465,23 +465,19 @@ def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit, calc
         price = panel['price_rub']
         panel_width_mm = WALL_PRODUCTS[title][thickness]['width_mm']
         panel_w_m = panel_width_mm / 1000
-        panel_h_m = length_mm / 1000
-        gross_area = wall_width_m * wall_height_m
-        net_area = gross_area - deduct_area_m2
-
+        panel_h_m = length_mm / 1000 if panel_h_m is None else panel_h_m
         if calc_mode == 'panel':
-            effective_h = min(wall_height_m, panel_h_m)
-            mode_text = "по высоте панели"
+            eff_h = min(wall_height_m, panel_h_m)
+            mode_text = "(обрезка по высоте панели)"
         else:
-            effective_h = wall_height_m
-            mode_text = "по высоте помещения"
-
-        # Более точный расчёт с учётом рядов и колонок (приближённо, без вычетов по рядам)
-        num_rows = math.ceil(effective_h / panel_h_m)
+            eff_h = wall_height_m
+            mode_text = "(стыковка панелей)"
+        gross_area = wall_width_m * eff_h
+        net_area = gross_area - deduct_area_m2
+        num_rows = 1 if calc_mode == 'panel' else math.ceil(wall_height_m / panel_h_m)
         num_cols = math.ceil(wall_width_m / panel_w_m)
         total_panels_approx = num_rows * num_cols
-        # Корректировка на площадь (учёт 10% запаса и вычетов)
-        required_area = net_area * 1.1
+        required_area = net_area * 1.1  # 10% reserve
         panels = max(total_panels_approx, math.ceil(required_area / area_m2))
         total_area = panels * area_m2
         waste_area = total_area - net_area
@@ -492,11 +488,11 @@ def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit, calc
         width_m = wall_width_m
         result_text = f"""Выбранный материал: {title}  
 Толщина: {thickness} мм  
-Высота: {length_mm} мм ({mode_text})  
+Высота: {length_mm} мм {mode_text}  
 Название/артикул клиента: **«{custom_name}»**  
 
 🔹 Ширина зоны отделки: {width_mm:.1f} мм (или {width_m:.2f} м)  
-🔹 Площадь зоны отделки: {width_m:.2f} м × {wall_height_m:.1f} м = {gross_area:.2f} м²  
+🔹 Площадь зоны отделки: {width_m:.2f} м × {eff_h:.1f} м = {gross_area:.2f} м²  
 🔹 Площадь к вычету (окна/двери): {deduct_area_m2:.2f} м²  
 🔹 Общая площадь для покрытия: {gross_area:.2f} м² - {deduct_area_m2:.2f} м² = {net_area:.2f} м²  
 
@@ -666,6 +662,38 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['unit'] = unit
         context.chat_data['phase'] = 'wall_width'
         await query.edit_message_text(f"Введите ширину стены ({unit}):")
+    elif action == 'choose_length':
+        if len(parts) < 2:
+            await query.answer("Ошибка выбора.")
+            return
+        choice = parts[1]
+        item = context.chat_data['current_item']
+        if choice == 'original':
+            chosen_length = item['length']
+        elif choice == 'suggested':
+            if 'suggested_length' not in context.chat_data:
+                await query.answer("Нет предложенного варианта.")
+                return
+            chosen_length = context.chat_data['suggested_length']
+            del context.chat_data['suggested_length']
+        else:
+            await query.answer("Неверный выбор.")
+            return
+        item['length'] = chosen_length
+        panel_h_m = chosen_length / 1000.0
+        height = context.chat_data['wall_height_m']
+        tolerance = 0.05
+        if abs(height - panel_h_m) <= tolerance:
+            await query.edit_message_text("Отлично, высоты совпадают! Есть окна? (Да/Нет)", reply_markup=build_yes_no_keyboard("okno|yes", "okno|no"))
+            context.chat_data['phase'] = 'okno'
+        else:
+            mode_text = f"Высота панели: {panel_h_m:.1f} м\nВысота помещения: {height:.1f} м\n\nКак рассчитать?"
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("По высоте панели (обрезать стену)", callback_data="calc_mode|panel")],
+                [InlineKeyboardButton("По высоте помещения (стыковать панели)", callback_data="calc_mode|room")],
+            ])
+            await query.edit_message_text(mode_text, reply_markup=kb)
+            context.chat_data['phase'] = 'calc_mode'
     elif action == 'calc_mode':
         mode = parts[1]
         context.chat_data['calc_mode'] = mode
@@ -704,13 +732,14 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.chat_data['phase'] = 'broadcast'
             await query.edit_message_text("Введите текст для рассылки в группу:")
     elif action == 'partner_role':
-        role = parts[1]
-        context.chat_data['partner_role'] = {
+        role_map = {
             'retail': 'Розничный магазин',
             'installer': 'Монтажная бригада',
             'designer': 'Дизайнер/Архитектор',
             'other': 'Другое'
-        }[role]
+        }
+        role = role_map.get(parts[1], 'Не указано')
+        context.chat_data['partner_role'] = role
         context.chat_data['phase'] = 'partner_message'
         await query.edit_message_text("Расскажите подробнее о вашем бизнесе или вопросе:")
     # Окна/двери (на русском)
@@ -827,23 +856,36 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         context.chat_data['wall_height_m'] = height
 
-        # Проверка на WPC панели и уточнение режима расчёта
+        # Проверка на WPC панели и уточнение длины/режима расчёта
         if 'current_item' in context.chat_data and context.chat_data['current_item']['category'] == 'walls':
             item = context.chat_data['current_item']
-            panel_h_m = item['length'] / 1000
-            tolerance = 0.1  # 10 см
+            current_length = item['length']
+            panel_h_m = current_length / 1000.0
+            tolerance = 0.05  # 5 см
             if abs(height - panel_h_m) > tolerance:
                 available_lengths = sorted(item['available_lengths'])
-                # Найти ближайшую доступную длину >= высоты помещения
-                candidates = [l for l in available_lengths if l / 1000 >= height]
+                candidates = [l for l in available_lengths if l / 1000.0 >= height]
                 if candidates:
-                    suggested_length = min(candidates, key=lambda l: l / 1000)
-                    suggested_m = suggested_length / 1000
-                    suggest_text = f"\n\n💡 Рекомендую панель высотой {suggested_length} мм ({suggested_m} м) для лучшего совпадения и минимизации отходов."
+                    suggested_length = min(candidates, key=lambda l: l / 1000.0)
                 else:
-                    suggest_text = "\n\n💡 Доступные высоты панелей не покрывают вашу высоту помещения полностью — рассмотрите стыковку или консультацию."
-
-                text = f"Высота выбранной панели: {panel_h_m} м\nВысота помещения: {height} м{suggest_text}\n\nКак рассчитать площадь?"
+                    suggested_length = max(available_lengths)
+                if suggested_length != current_length:
+                    context.chat_data['suggested_length'] = suggested_length
+                    current_text = f"{current_length} мм ({current_length/1000.0:.1f} м)"
+                    suggest_m = suggested_length / 1000.0
+                    suggest_text = f"{suggested_length} мм ({suggest_m:.1f} м)"
+                    if not candidates:
+                        suggest_text += " (максимальная доступная)"
+                    text = f"Высота выбранной панели: {panel_h_m:.1f} м\nВысота помещения: {height:.1f} м\n\n💡 Рекомендую панель высотой {suggest_text} для лучшего совпадения и минимизации отходов."
+                    kb = InlineKeyboardMarkup([
+                        [InlineKeyboardButton(f"Оставить {current_text}", callback_data="choose_length|original")],
+                        [InlineKeyboardButton(f"Выбрать {suggest_text}", callback_data="choose_length|suggested")],
+                    ])
+                    await update.message.reply_text(text, reply_markup=kb)
+                    context.chat_data['phase'] = 'choose_length'
+                    return
+                # Если suggested == current, то сразу к режиму
+                text = f"Высота панели: {panel_h_m:.1f} м\nВысота помещения: {height:.1f} м\n\nКак рассчитать площадь?"
                 kb = InlineKeyboardMarkup([
                     [InlineKeyboardButton("По высоте панели (обрезать стену)", callback_data="calc_mode|panel")],
                     [InlineKeyboardButton("По высоте помещения (стыковать панели)", callback_data="calc_mode|room")],
