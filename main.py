@@ -453,7 +453,7 @@ def parse_size(text: str, unit: str) -> float:
     except:
         return 0.0
 
-def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit) -> tuple[str, int]:
+def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit, calc_mode=None, panel_h_m=None) -> tuple[str, int]:
     category = item['category']
     cost = 0
     if category == 'walls':
@@ -464,9 +464,25 @@ def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit) -> t
         area_m2 = panel['area_m2']
         price = panel['price_rub']
         panel_width_mm = WALL_PRODUCTS[title][thickness]['width_mm']
+        panel_w_m = panel_width_mm / 1000
+        panel_h_m = length_mm / 1000
         gross_area = wall_width_m * wall_height_m
         net_area = gross_area - deduct_area_m2
-        panels = math.ceil(net_area / area_m2)
+
+        if calc_mode == 'panel':
+            effective_h = min(wall_height_m, panel_h_m)
+            mode_text = "по высоте панели"
+        else:
+            effective_h = wall_height_m
+            mode_text = "по высоте помещения"
+
+        # Более точный расчёт с учётом рядов и колонок (приближённо, без вычетов по рядам)
+        num_rows = math.ceil(effective_h / panel_h_m)
+        num_cols = math.ceil(wall_width_m / panel_w_m)
+        total_panels_approx = num_rows * num_cols
+        # Корректировка на площадь (учёт 10% запаса и вычетов)
+        required_area = net_area * 1.1
+        panels = max(total_panels_approx, math.ceil(required_area / area_m2))
         total_area = panels * area_m2
         waste_area = total_area - net_area
         waste_pct = (waste_area / total_area) * 100 if total_area > 0 else 0
@@ -476,7 +492,7 @@ def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit) -> t
         width_m = wall_width_m
         result_text = f"""Выбранный материал: {title}  
 Толщина: {thickness} мм  
-Высота: {length_mm} мм  
+Высота: {length_mm} мм ({mode_text})  
 Название/артикул клиента: **«{custom_name}»**  
 
 🔹 Ширина зоны отделки: {width_mm:.1f} мм (или {width_m:.2f} м)  
@@ -485,7 +501,7 @@ def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit) -> t
 🔹 Общая площадь для покрытия: {gross_area:.2f} м² - {deduct_area_m2:.2f} м² = {net_area:.2f} м²  
 
 🔸 Площадь одной панели ({length_mm} мм × {panel_width_mm} мм): {area_m2} м²  
-🔸 Необходимое количество панелей: {net_area:.2f} м² ÷ {area_m2} м² ≈ {net_area / area_m2:.2f} (округляем до {panels} панелей)  
+🔸 Необходимое количество панелей: {net_area:.2f} м² ÷ {area_m2} м² ≈ {net_area / area_m2:.2f} (округляем до {panels} панелей, с учётом рядов: {num_rows} рядов × {num_cols} панелей в ряду)  
 🔸 Общая площадь закупаемых панелей: {panels} панелей × {area_m2} м² = {total_area:.1f} м²  
 
 🔹 Отходы:  
@@ -609,8 +625,10 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         code = parts[1]
         thick = int(parts[2])
         length = int(parts[3])
+        title = PRODUCT_CODES[code]
+        available_lengths = list(WALL_PRODUCTS[title][thick]['panels'].keys())
         cat = 'walls'
-        item = {'category': cat, 'product_code': code, 'thickness': thick, 'length': length}
+        item = {'category': cat, 'product_code': code, 'thickness': thick, 'length': length, 'available_lengths': available_lengths}
         context.chat_data['current_item'] = item
         await query.edit_message_text("Знаете точное название/артикул материала?", reply_markup=build_custom_name_keyboard())
     elif action == 'custom_name':
@@ -648,6 +666,11 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['unit'] = unit
         context.chat_data['phase'] = 'wall_width'
         await query.edit_message_text(f"Введите ширину стены ({unit}):")
+    elif action == 'calc_mode':
+        mode = parts[1]
+        context.chat_data['calc_mode'] = mode
+        await query.edit_message_text("Есть окна? (Да/Нет)", reply_markup=build_yes_no_keyboard("okno|yes", "okno|no"))
+        context.chat_data['phase'] = 'okno'
     elif action == 'add_another':
         if parts[1] == 'yes':
             context.chat_data['phase'] = 'select_cat'
@@ -708,7 +731,9 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 height = context.chat_data['wall_height_m']
                 deduct = context.chat_data['deduct_area']
                 unit = context.user_data.get('unit', 'm')
-                result_text, cost = calculate_item(item, width, height, deduct, unit)
+                calc_mode = context.chat_data.get('calc_mode')
+                panel_h_m = item.get('length', 0) / 1000 if item['category'] == 'walls' else None
+                result_text, cost = calculate_item(item, width, height, deduct, unit, calc_mode, panel_h_m)
                 context.chat_data['completed_calcs'].append((result_text, cost))
                 await query.edit_message_text(result_text, parse_mode=ParseMode.MARKDOWN)
                 await context.bot.send_message(query.message.chat_id, "Добавить ещё материал?", reply_markup=build_add_another_keyboard())
@@ -781,7 +806,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             height = context.chat_data.get('wall_height_m', 0)
             deduct = context.chat_data.get('deduct_area', 0)
             unit = context.user_data.get('unit', 'm')
-            result_text, cost = calculate_item(item, width or 1, height or 1, deduct, unit)  # Dummy if no dims
+            result_text, cost = calculate_item(item, width or 1, height or 1, deduct, unit)
             context.chat_data['completed_calcs'].append((result_text, cost))
             await update.message.reply_text(result_text + "\n\nДобавить ещё материал?", reply_markup=build_add_another_keyboard())
             context.chat_data['phase'] = None
@@ -801,7 +826,34 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Неверное значение. Введите высоту заново:")
             return
         context.chat_data['wall_height_m'] = height
-        context.chat_data['phase'] = 'okno'  # Русский: окно
+
+        # Проверка на WPC панели и уточнение режима расчёта
+        if 'current_item' in context.chat_data and context.chat_data['current_item']['category'] == 'walls':
+            item = context.chat_data['current_item']
+            panel_h_m = item['length'] / 1000
+            tolerance = 0.1  # 10 см
+            if abs(wall_height - panel_h_m) > tolerance:
+                available_lengths = sorted(item['available_lengths'])
+                # Найти ближайшую доступную длину >= высоты помещения
+                candidates = [l for l in available_lengths if l / 1000 >= wall_height]
+                if candidates:
+                    suggested_length = min(candidates, key=lambda l: l / 1000)
+                    suggested_m = suggested_length / 1000
+                    suggest_text = f"\n\n💡 Рекомендую панель высотой {suggested_length} мм ({suggested_m} м) для лучшего совпадения и минимизации отходов."
+                else:
+                    suggest_text = "\n\n💡 Доступные высоты панелей не покрывают вашу высоту помещения полностью — рассмотрите стыковку или консультацию."
+
+                text = f"Высота выбранной панели: {panel_h_m} м\nВысота помещения: {wall_height} м{suggest_text}\n\nКак рассчитать площадь?"
+                kb = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("По высоте панели (обрезать стену)", callback_data="calc_mode|panel")],
+                    [InlineKeyboardButton("По высоте помещения (стыковать панели)", callback_data="calc_mode|room")],
+                ])
+                await update.message.reply_text(text, reply_markup=kb)
+                context.chat_data['phase'] = 'calc_mode'
+                return
+
+        # Если совпадение или не WPC — сразу к окнам
+        context.chat_data['phase'] = 'okno'
         context.chat_data['windows'] = []
         context.chat_data['doors'] = []
         context.chat_data['deduct_area'] = 0.0
