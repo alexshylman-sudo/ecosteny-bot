@@ -372,81 +372,104 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     logger.info(f"Button clicked by user {user_id}: data='{data}'")  # DEBUG LOG
 
     try:
-        # Универсальный edit: если фото — edit_caption, иначе text
+        # Фикс: Для фото — удаляем и отправляем новое; для текста — редактируем
         if query.message.photo:
-            await query.edit_message_caption(
-                caption="Обработка...",  # Placeholder
-                reply_markup=None  # Убираем старую клавиатуру
-            )
+            await query.message.delete()
+            logger.info("Deleted photo message")
+            # Отправляем новое сообщение
+            new_msg = await query.message.reply_text("Обработка завершена.")  # Placeholder, но сразу заменим ниже
+            logger.info("Replied new text after photo delete")
         else:
-            await query.edit_message_text(
-                text="Обработка...",
-                reply_markup=None
-            )
+            # Для текста: редактируем
+            await query.edit_message_text(text="Обработка завершена.")  # Placeholder
+            logger.info("Edited text message")
 
         if data == "main|calc":
-            await query.edit_message_text(
-                text="Выберите категорию для расчёта:",
-                reply_markup=build_calc_category_keyboard()
-            )
-            logger.info("Handled main|calc")
+            text = "Выберите категорию для расчёта:"
+            markup = build_calc_category_keyboard()
+            if query.message.photo:
+                await new_msg.edit_text(text=text, reply_markup=markup)
+                logger.info("Handled main|calc (photo -> new text)")
+            else:
+                await query.edit_message_text(text=text, reply_markup=markup)
+                logger.info("Handled main|calc (text edit)")
             return
 
         if data == "main|info":
-            await query.edit_message_text(
-                text="Информация о компании: ECO Стены — премиум WPC панели для интерьера. Подробнее в каталоге.",
-                reply_markup=build_main_menu_keyboard()
-            )
-            logger.info("Handled main|info")
+            text = "Информация о компании: ECO Стены — премиум WPC панели для интерьера. Подробнее в каталоге."
+            markup = build_main_menu_keyboard()
+            if query.message.photo:
+                await new_msg.edit_text(text=text, reply_markup=markup)
+                logger.info("Handled main|info (photo -> new text)")
+            else:
+                await query.edit_message_text(text=text, reply_markup=markup)
+                logger.info("Handled main|info (text edit)")
             return
 
         if data == "main|catalogs":
-            await query.edit_message_text(
-                text=f"Каталоги: Загрузите PDF или свяжитесь с нами в {TG_GROUP}.",
-                reply_markup=build_main_menu_keyboard()
-            )
-            logger.info("Handled main|catalogs")
+            text = f"Каталоги: Загрузите PDF или свяжитесь с нами в {TG_GROUP}."
+            markup = build_main_menu_keyboard()
+            if query.message.photo:
+                await new_msg.edit_text(text=text, reply_markup=markup)
+                logger.info("Handled main|catalogs (photo -> new text)")
+            else:
+                await query.edit_message_text(text=text, reply_markup=markup)
+                logger.info("Handled main|catalogs (text edit)")
             return
 
         if data == "main|presentation":
-            await query.edit_message_text(
-                text=f"Презентация: [Скачать PDF]({PRESENTATION_URL})",
-                reply_markup=build_main_menu_keyboard(),
-                parse_mode=ParseMode.MARKDOWN
-            )
-            logger.info("Handled main|presentation")
+            text = f"Презентация: [Скачать PDF]({PRESENTATION_URL})"
+            markup = build_main_menu_keyboard()
+            if query.message.photo:
+                await new_msg.edit_text(text=text, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
+                logger.info("Handled main|presentation (photo -> new text)")
+            else:
+                await query.edit_message_text(text=text, reply_markup=markup, parse_mode=ParseMode.MARKDOWN)
+                logger.info("Handled main|presentation (text edit)")
             return
 
         if data == "main|contacts":
-            await query.edit_message_text(
-                text="Контакты: @ecosteni | Тел: +7 (XXX) XXX-XX-XX | Email: info@ecosteni.ru",
-                reply_markup=build_main_menu_keyboard()
-            )
-            logger.info("Handled main|contacts")
+            text = "Контакты: @ecosteni | Тел: +7 (XXX) XXX-XX-XX | Email: info@ecosteni.ru"
+            markup = build_main_menu_keyboard()
+            if query.message.photo:
+                await new_msg.edit_text(text=text, reply_markup=markup)
+                logger.info("Handled main|contacts (photo -> new text)")
+            else:
+                await query.edit_message_text(text=text, reply_markup=markup)
+                logger.info("Handled main|contacts (text edit)")
             return
 
         if data == "main|partner":
-            await query.edit_message_text(
-                text="Стать партнёром: Напишите в {TG_GROUP} для деталей.",
-                reply_markup=build_main_menu_keyboard()
-            )
-            logger.info("Handled main|partner")
+            text = "Стать партнёром: Напишите в {TG_GROUP} для деталей."
+            markup = build_main_menu_keyboard()
+            if query.message.photo:
+                await new_msg.edit_text(text=text, reply_markup=markup)
+                logger.info("Handled main|partner (photo -> new text)")
+            else:
+                await query.edit_message_text(text=text, reply_markup=markup)
+                logger.info("Handled main|partner (text edit)")
             return
 
         if data == "main|admin" and user_id == ADMIN_CHAT_ID:
-            await query.edit_message_text(
-                text="Админ-панель: Статистика - /stats (в чате).",
-                reply_markup=build_main_menu_keyboard()
-            )
-            logger.info("Handled main|admin")
+            text = "Админ-панель: Статистика - /stats (в чате)."
+            markup = build_main_menu_keyboard()
+            if query.message.photo:
+                await new_msg.edit_text(text=text, reply_markup=markup)
+                logger.info("Handled main|admin (photo -> new text)")
+            else:
+                await query.edit_message_text(text=text, reply_markup=markup)
+                logger.info("Handled main|admin (text edit)")
             return
 
         if data == "calc|wall":
-            await query.edit_message_text(
-                text="Выберите тип панели:",
-                reply_markup=build_wall_type_keyboard()
-            )
-            logger.info("Handled calc|wall")
+            text = "Выберите тип панели:"
+            markup = build_wall_type_keyboard()
+            if query.message.photo:
+                await new_msg.edit_text(text=text, reply_markup=markup)
+                logger.info("Handled calc|wall (photo -> new text)")
+            else:
+                await query.edit_message_text(text=text, reply_markup=markup)
+                logger.info("Handled calc|wall (text edit)")
             return
 
         parts = data.split('|')
@@ -454,11 +477,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             type_name = parts[1]
             context.user_data['calc_type'] = type_name
             thicknesses = list(WALL_PRODUCTS[type_name].keys())
-            await query.edit_message_text(
-                text=f"Выбрано: {type_name}. Выберите толщину:",
-                reply_markup=build_thickness_keyboard(thicknesses)
-            )
-            logger.info(f"Handled calc_type|{type_name}")
+            text = f"Выбрано: {type_name}. Выберите толщину:"
+            markup = build_thickness_keyboard(thicknesses)
+            if query.message.photo:
+                await new_msg.edit_text(text=text, reply_markup=markup)
+                logger.info(f"Handled calc_type|{type_name} (photo -> new text)")
+            else:
+                await query.edit_message_text(text=text, reply_markup=markup)
+                logger.info(f"Handled calc_type|{type_name} (text edit)")
             return
 
         if parts[0] == "thickness" and len(parts) == 2:
@@ -468,12 +494,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             context.user_data['calc_product'] = product
             context.user_data['calc_thickness'] = thickness
             # НОВОЕ: Выбор метода расчёта
-            keyboard = build_method_keyboard()
-            await query.edit_message_text(
-                text=f"Выбрано: {type_name}, {thickness} мм.\n\nКак рассчитать количество?",
-                reply_markup=keyboard
-            )
-            logger.info(f"Handled thickness|{thickness}")
+            text = f"Выбрано: {type_name}, {thickness} мм.\n\nКак рассчитать количество?"
+            markup = build_method_keyboard()
+            if query.message.photo:
+                await new_msg.edit_text(text=text, reply_markup=markup)
+                logger.info(f"Handled thickness|{thickness} (photo -> new text)")
+            else:
+                await query.edit_message_text(text=text, reply_markup=markup)
+                logger.info(f"Handled thickness|{thickness} (text edit)")
             return
 
         # НОВОЕ: Обработка метода расчёта
@@ -482,61 +510,70 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             context.user_data['calc_method'] = method
             product = context.user_data['calc_product']
             if method == "room":
-                await query.edit_message_text(
-                    text="Введите размеры помещения: длина (м), ширина (м), высота (м).\n"
-                         "Формат: 5, 4, 2.7\n"
-                         "(Это площадь стен без окон/дверей)",
-                    reply_markup=build_back_button()
-                )
+                text = "Введите размеры помещения: длина (м), ширина (м), высота (м).\nФормат: 5, 4, 2.7\n(Это площадь стен без окон/дверей)"
+                markup = build_back_button()
                 context.user_data['waiting_for'] = 'room_dimensions'
                 logger.info("Handled calc_method|room")
             else:  # panels
-                lengths_keyboard = build_length_keyboard(product['panels'])
-                await query.edit_message_text(
-                    text="Выберите длину панели:",
-                    reply_markup=lengths_keyboard
-                )
+                text = "Выберите длину панели:"
+                markup = build_length_keyboard(product['panels'])
                 logger.info("Handled calc_method|panels")
+            if query.message.photo:
+                await new_msg.edit_text(text=text, reply_markup=markup)
+            else:
+                await query.edit_message_text(text=text, reply_markup=markup)
             return
 
         if parts[0] == "calc_length" and len(parts) == 2:
             length = int(parts[1])
             context.user_data['calc_length'] = length
-            await query.edit_message_text(
-                text="Сколько таких панелей нужно? Введите число:",
-                reply_markup=build_back_button()
-            )
+            text = "Сколько таких панелей нужно? Введите число:"
+            markup = build_back_button()
             context.user_data['waiting_for'] = 'panel_count'
-            logger.info(f"Handled calc_length|{length}")
+            if query.message.photo:
+                await new_msg.edit_text(text=text, reply_markup=markup)
+                logger.info(f"Handled calc_length|{length} (photo -> new text)")
+            else:
+                await query.edit_message_text(text=text, reply_markup=markup)
+                logger.info(f"Handled calc_length|{length} (text edit)")
             return
 
         # Пример обработки back
         if data.startswith("back|"):
-            await query.edit_message_text(
-                text="Главное меню:",
-                reply_markup=build_main_menu_keyboard()
-            )
+            text = "Главное меню:"
+            markup = build_main_menu_keyboard()
             if 'waiting_for' in context.user_data:
                 del context.user_data['waiting_for']
-            logger.info("Handled back")
+            if query.message.photo:
+                await new_msg.edit_text(text=text, reply_markup=markup)
+                logger.info("Handled back (photo -> new text)")
+            else:
+                await query.edit_message_text(text=text, reply_markup=markup)
+                logger.info("Handled back (text edit)")
             return
 
         # Fallback для необработанных
-        await query.edit_message_text(
-            text="Кнопка не распознана. Попробуйте /start.",
-            reply_markup=build_main_menu_keyboard()
-        )
+        text = "Кнопка не распознана. Попробуйте /start."
+        markup = build_main_menu_keyboard()
+        if query.message.photo:
+            await new_msg.edit_text(text=text, reply_markup=markup)
+        else:
+            await query.edit_message_text(text=text, reply_markup=markup)
         logger.warning(f"Unrecognized button data: {data}")
 
     except Exception as e:
         logger.error(f"Error in button_handler for data '{data}': {e}")
+        fallback_text = "Произошла ошибка. Попробуйте /start заново."
+        fallback_markup = build_main_menu_keyboard()
         try:
-            await query.edit_message_text(
-                text="Произошла ошибка. Попробуйте /start заново.",
-                reply_markup=build_main_menu_keyboard()
-            )
-        except:
-            pass  # Если и edit фейлит
+            if query.message.photo:
+                await query.message.reply_text(fallback_text, reply_markup=fallback_markup)
+            else:
+                await query.edit_message_text(text=fallback_text, reply_markup=fallback_markup)
+        except Exception as e2:
+            logger.error(f"Failed fallback edit/reply: {e2}")
+            # Ultimate fallback: send new
+            await context.bot.send_message(chat_id=query.from_user.id, text=fallback_text, reply_markup=fallback_markup)
 
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text
@@ -637,7 +674,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 # Error handler для всего приложения
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.warning(f"Update {getattr(update, 'update_id', 'N/A')} caused error {context.error}")
-    # Отправляем пользователю, если возможно
+    # Фикс: Всегда отправляем новое сообщение (не edit)
     if update and hasattr(update, 'effective_chat') and update.effective_chat:
         try:
             await context.bot.send_message(
