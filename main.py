@@ -1072,6 +1072,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             await update.message.reply_text("Неверное количество. Введите заново:")
     elif phase == 'admin_cost_yuan':
+        text = text.replace(',', '.')
         try:
             cost_yuan = float(text)
             if cost_yuan <= 0:
@@ -1083,6 +1084,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Введите <b>Курс Юаня</b> (к рублю):", parse_mode=ParseMode.HTML)
         context.chat_data['phase'] = 'admin_cost_yuan_rate'
     elif phase == 'admin_cost_yuan_rate':
+        text = text.replace(',', '.')
         try:
             yuan_rate = float(text)
             if yuan_rate <= 0:
@@ -1094,6 +1096,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Введите <b>Курс Доллара</b> (к рублю):", parse_mode=ParseMode.HTML)
         context.chat_data['phase'] = 'admin_cost_dollar_rate'
     elif phase == 'admin_cost_dollar_rate':
+        text = text.replace(',', '.')
         try:
             dollar_rate = float(text)
             if dollar_rate <= 0:
@@ -1105,6 +1108,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Введите <b>Ставку доставки за 1 кг в $</b>:", parse_mode=ParseMode.HTML)
         context.chat_data['phase'] = 'admin_cost_delivery_rate'
     elif phase == 'admin_cost_delivery_rate':
+        text = text.replace(',', '.')
         try:
             delivery_rate_usd = float(text)
             if delivery_rate_usd < 0:
@@ -1116,6 +1120,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Введите <b>Вес упаковки</b> (кг):", parse_mode=ParseMode.HTML)
         context.chat_data['phase'] = 'admin_cost_package_weight'
     elif phase == 'admin_cost_package_weight':
+        text = text.replace(',', '.')
         try:
             package_weight = float(text)
             if package_weight < 0:
