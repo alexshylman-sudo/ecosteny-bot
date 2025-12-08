@@ -693,7 +693,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 'weight_per_m2': weight_per_m2,
                 'price_rub': price_rub
             }
-            text = f"<b>Выбрана панель:</b>\n{title}\nТолщина: {thick} мм\nДлина: {length} мм\nПлощадь: {area_m2} м²\nВес/м²: {weight_per_m2} кг\nЦена: {price_rub:,} ₽\n\nВведите <b>Себестоимость в юанях</b> (за панель):"
+            text = f"<b>Выбрана панель:</b>\n{title}\nТолщина: {thick} мм\nДлина: {length} мм\nПлощадь: {area_m2} м²\nВес/м²: {weight_per_m2} кг\nЦена: {price_rub:,} ₽\n\nВведите <b>Себестоимость в юанях</b> (за 1 м²):"
             context.chat_data['phase'] = 'admin_cost_yuan'
             await query.edit_message_text(text, parse_mode=ParseMode.HTML)
         else:
@@ -1152,15 +1152,16 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         package_weight = context.chat_data['package_weight']
         panels_per_package = context.chat_data['panels_per_package']
 
+        cost_yuan_per_panel = cost_yuan * area_m2
         panel_weight_kg = weight_per_m2 * area_m2
         delivery_per_panel_usd = delivery_rate_usd * panel_weight_kg
         delivery_per_panel_rub = delivery_per_panel_usd * dollar_rate
         delivery_package_rub = package_weight * delivery_rate_usd * dollar_rate
         total_delivery_rub = panels_per_package * delivery_per_panel_rub + delivery_package_rub
-        cost_goods_rub = cost_yuan * yuan_rate * panels_per_package
+        cost_goods_rub = cost_yuan_per_panel * yuan_rate * panels_per_package
         total_cost_rub = cost_goods_rub + total_delivery_rub
         total_weight_kg = panel_weight_kg * panels_per_package + package_weight
-        cost_per_panel_no_del = cost_goods_rub / panels_per_package
+        cost_per_panel_no_del = cost_yuan_per_panel * yuan_rate
         cost_per_panel_with_del = total_cost_rub / panels_per_package
         profit_per = price_rub - cost_per_panel_with_del
         kickback_per = 0.4 * price_rub
@@ -1180,7 +1181,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 Цена реализации: {price_rub:,} ₽
 
 <b>Вводные данные:</b>
-Себестоимость в юанях: {cost_yuan}
+Себестоимость в юанях (за 1 м²): {cost_yuan}
 Курс Юань: {yuan_rate}
 Курс $: {dollar_rate}
 Ставка доставки за 1 кг в $: {delivery_rate_usd}
