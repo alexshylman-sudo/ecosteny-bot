@@ -337,8 +337,6 @@ def build_length_keyboard(panels: dict) -> InlineKeyboardMarkup:
     buttons.append(build_back_button()[0])
     return InlineKeyboardMarkup(buttons)
 
-# ... (остальные клавиатуры, если есть, остаются без изменений)
-
 # ============================
 #   ОБРАБОТЧИКИ
 # ============================
@@ -429,14 +427,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         context.user_data['waiting_for'] = 'panel_count'
         return
 
-    # ... (остальные обработки кнопок, например для других категорий, остаются без изменений)
-
     # Пример обработки back
     if data.startswith("back|"):
         await query.edit_message_text("Главное меню:", reply_markup=build_main_menu_keyboard())
         if 'waiting_for' in context.user_data:
             del context.user_data['waiting_for']
         return
+
+    # ... (добавь обработчики для других кнопок, если нужно, напр. info, catalogs и т.д.)
 
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text
@@ -456,14 +454,14 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 raise ValueError
             length, width, height = dims
             area_m2 = 2 * (length + width) * height  # Площадь стен
-            # Выбор длины (как в текущем коде, предполагаем)
+            # Выбор длины
             lengths_keyboard = build_length_keyboard(product['panels'])
             await update.message.reply_text(
                 f"Площадь стен: {area_m2:.2f} м².\nВыберите длину панели для расчёта:",
                 reply_markup=lengths_keyboard
             )
             user_data['calc_area'] = area_m2
-            del user_data['waiting_for']
+            user_data['waiting_for'] = 'length_choice_after_room'  # Переходим к выбору длины
         except ValueError:
             await update.message.reply_text("Неверный формат. Попробуйте: 5, 4, 2.7")
 
@@ -494,9 +492,12 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         except ValueError:
             await update.message.reply_text("Введите целое число панелей.")
 
-    elif waiting == 'length_choice_after_room':  # Предполагаемая часть текущего кода для room
+    elif waiting == 'length_choice_after_room':
+        # Обработка выбора длины после ввода размеров (предполагаем, что это callback, но для message - fallback)
         try:
-            length = int(text)  # Или парсинг, если кнопка
+            length = int(text)  # Если ввод числа; иначе используй кнопки
+            if length not in product['panels']:
+                raise ValueError
             area = user_data['calc_area']
             panel_info = product['panels'][length]
             num_panels = math.ceil(area / panel_info['area_m2'])
@@ -519,7 +520,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             await update.message.reply_text(result_text, reply_markup=build_main_menu_keyboard(), parse_mode=ParseMode.HTML)
             user_data.clear()
         except ValueError:
-            await update.message.reply_text("Выберите длину из кнопок или введите число.")
+            await update.message.reply_text("Выберите длину из кнопок или введите число из доступных (2440, 2600 и т.д.).")
 
     # ... (другие waiting_for для профилей, реек и т.д. остаются)
 
@@ -528,8 +529,32 @@ tg_application.add_handler(CommandHandler("start", start))
 tg_application.add_handler(CallbackQueryHandler(button_handler))
 tg_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
 
-# ... (остальной код для Flask webhook, если есть, остается без изменений; добавьте если нужно)
+# ============================
+#   FLASK ROUTES (WEBHOOK)
+# ============================
+
+@app.route('/', methods=['GET', 'HEAD'])
+def index():
+    """Health-check для Render."""
+    return jsonify({"status": "OK"}), 200
+
+@app.route(f'/{TG_BOT_TOKEN}', methods=['POST'])
+def webhook():
+    """Telegram webhook handler."""
+    try:
+        update = Update.de_json(request.get_json(force=True), tg_application.bot)
+        if update:
+            loop = get_event_loop()
+            loop.run_until_complete(tg_application.process_update(update))
+        return jsonify({"status": "OK"}), 200
+    except TelegramError as e:
+        logger.error(f"Telegram error in webhook: {e}")
+        return jsonify({"status": "Error", "message": str(e)}), 500
+    except Exception as e:
+        logger.error(f"Unexpected error in webhook: {e}")
+        return jsonify({"status": "Error", "message": str(e)}), 500
 
 if __name__ == "__main__":
-    # Для локального запуска
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    # Для локального запуска (используй ngrok для теста webhook)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port, debug=False)
