@@ -683,6 +683,10 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         height = context.chat_data['wall_height_m']
         tolerance = 0.05
         if abs(height - panel_h_m) <= tolerance:
+            # Initialize lists here
+            context.chat_data['windows'] = []
+            context.chat_data['doors'] = []
+            context.chat_data['deduct_area'] = 0.0
             await query.edit_message_text("Отлично, высоты совпадают! Есть окна? (Да/Нет)", reply_markup=build_yes_no_keyboard("okno|yes", "okno|no"))
             context.chat_data['phase'] = 'okno'
         else:
@@ -696,6 +700,10 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif action == 'calc_mode':
         mode = parts[1]
         context.chat_data['calc_mode'] = mode
+        # Initialize lists here
+        context.chat_data['windows'] = []
+        context.chat_data['doors'] = []
+        context.chat_data['deduct_area'] = 0.0
         await query.edit_message_text("Есть окна? (Да/Нет)", reply_markup=build_yes_no_keyboard("okno|yes", "okno|no"))
         context.chat_data['phase'] = 'okno'
     elif action == 'add_another':
@@ -749,7 +757,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.chat_data['phase'] = 'opening_width'
             unit = context.user_data.get('unit', 'm')
             opening_single = "окна" if phase_key == 'windows' else "двери"
-            await query.edit_message_text(f"Введите ширину {opening_single[:-1]} (в {unit}):")
+            await query.edit_message_text(f"Введите ширину {opening_single} (в {unit}):")
         else:
             next_action = 'dver' if action.startswith('okno') else 'finish_calc'
             if next_action == 'finish_calc':
@@ -894,10 +902,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
         # Если совпадение или не WPC — сразу к окнам
-        context.chat_data['phase'] = 'okno'
         context.chat_data['windows'] = []
         context.chat_data['doors'] = []
         context.chat_data['deduct_area'] = 0.0
+        context.chat_data['phase'] = 'okno'
         await update.message.reply_text("Есть окна? (Да/Нет)", reply_markup=build_yes_no_keyboard("okno|yes", "okno|no"))
     elif phase == 'opening_width':
         w = parse_size(text, context.user_data.get('unit', 'm'))
@@ -906,8 +914,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         context.chat_data['temp_opening_width'] = w
         context.chat_data['phase'] = 'opening_height'
-        opening_single = "окна" if context.chat_data['current_opening_type'] == 'windows' else "двери"
-        await update.message.reply_text(f"Введите высоту {opening_single[:-1]} (в {context.user_data.get('unit', 'm')}):")
+        unit = context.user_data.get('unit', 'm')
+        opening_type = context.chat_data['current_opening_type']
+        opening_word = "окна" if opening_type == 'windows' else "двери"
+        await update.message.reply_text(f"Введите высоту этого {opening_word} (в {unit}):")
     elif phase == 'opening_height':
         h = parse_size(text, context.user_data.get('unit', 'm'))
         if h <= 0:
@@ -915,7 +925,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         area = context.chat_data['temp_opening_width'] * h
         phase_key = context.chat_data['current_opening_type']
+        if phase_key not in context.chat_data:
+            context.chat_data[phase_key] = []
         context.chat_data[phase_key].append(area)
+        if 'deduct_area' not in context.chat_data:
+            context.chat_data['deduct_area'] = 0.0
         context.chat_data['deduct_area'] += area
         if phase_key == 'windows':
             added_text = "Окно добавлено"
