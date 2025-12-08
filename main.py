@@ -29,7 +29,7 @@ from telegram.ext import (
 )
 from telegram.error import TelegramError
 
-# Настройка логирования
+# Настройка логирования (больше деталей)
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -360,8 +360,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_photo(
         photo=WELCOME_PHOTO_URL,
         caption=greeting,
-        reply_markup=build_main_menu_keyboard(),
-        parse_mode=ParseMode.HTML
+        reply_markup=build_main_menu_keyboard()
     )
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -370,72 +369,174 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     data = query.data
     user_id = query.from_user.id
 
-    if data == "main|calc":
-        await query.edit_message_text("Выберите категорию для расчёта:", reply_markup=build_calc_category_keyboard())
-        return
+    logger.info(f"Button clicked by user {user_id}: data='{data}'")  # DEBUG LOG
 
-    if data == "calc|wall":
-        await query.edit_message_text("Выберите тип панели:", reply_markup=build_wall_type_keyboard())
-        return
-
-    parts = data.split('|')
-    if parts[0] == "calc_type" and len(parts) == 2:
-        type_name = parts[1]
-        context.user_data['calc_type'] = type_name
-        thicknesses = list(WALL_PRODUCTS[type_name].keys())
-        await query.edit_message_text(f"Выбрано: {type_name}. Выберите толщину:", reply_markup=build_thickness_keyboard(thicknesses))
-        return
-
-    if parts[0] == "thickness" and len(parts) == 2:
-        thickness = int(parts[1])
-        type_name = context.user_data['calc_type']
-        product = WALL_PRODUCTS[type_name][thickness]
-        context.user_data['calc_product'] = product
-        context.user_data['calc_thickness'] = thickness
-        # НОВОЕ: Выбор метода расчёта
-        keyboard = build_method_keyboard()
-        await query.edit_message_text(
-            f"Выбрано: {type_name}, {thickness} мм.\n\nКак рассчитать количество?",
-            reply_markup=keyboard
-        )
-        return
-
-    # НОВОЕ: Обработка метода расчёта
-    if parts[0] == "calc_method" and len(parts) == 2:
-        method = parts[1]
-        context.user_data['calc_method'] = method
-        product = context.user_data['calc_product']
-        if method == "room":
+    try:
+        # Универсальный edit: если фото — edit_caption, иначе text
+        if query.message.photo:
+            await query.edit_message_caption(
+                caption="Обработка...",  # Placeholder
+                reply_markup=None  # Убираем старую клавиатуру
+            )
+        else:
             await query.edit_message_text(
-                "Введите размеры помещения: длина (м), ширина (м), высота (м).\n"
-                "Формат: 5, 4, 2.7\n"
-                "(Это площадь стен без окон/дверей)",
+                text="Обработка...",
+                reply_markup=None
+            )
+
+        if data == "main|calc":
+            await query.edit_message_text(
+                text="Выберите категорию для расчёта:",
+                reply_markup=build_calc_category_keyboard()
+            )
+            logger.info("Handled main|calc")
+            return
+
+        if data == "main|info":
+            await query.edit_message_text(
+                text="Информация о компании: ECO Стены — премиум WPC панели для интерьера. Подробнее в каталоге.",
+                reply_markup=build_main_menu_keyboard()
+            )
+            logger.info("Handled main|info")
+            return
+
+        if data == "main|catalogs":
+            await query.edit_message_text(
+                text=f"Каталоги: Загрузите PDF или свяжитесь с нами в {TG_GROUP}.",
+                reply_markup=build_main_menu_keyboard()
+            )
+            logger.info("Handled main|catalogs")
+            return
+
+        if data == "main|presentation":
+            await query.edit_message_text(
+                text=f"Презентация: [Скачать PDF]({PRESENTATION_URL})",
+                reply_markup=build_main_menu_keyboard(),
+                parse_mode=ParseMode.MARKDOWN
+            )
+            logger.info("Handled main|presentation")
+            return
+
+        if data == "main|contacts":
+            await query.edit_message_text(
+                text="Контакты: @ecosteni | Тел: +7 (XXX) XXX-XX-XX | Email: info@ecosteni.ru",
+                reply_markup=build_main_menu_keyboard()
+            )
+            logger.info("Handled main|contacts")
+            return
+
+        if data == "main|partner":
+            await query.edit_message_text(
+                text="Стать партнёром: Напишите в {TG_GROUP} для деталей.",
+                reply_markup=build_main_menu_keyboard()
+            )
+            logger.info("Handled main|partner")
+            return
+
+        if data == "main|admin" and user_id == ADMIN_CHAT_ID:
+            await query.edit_message_text(
+                text="Админ-панель: Статистика - /stats (в чате).",
+                reply_markup=build_main_menu_keyboard()
+            )
+            logger.info("Handled main|admin")
+            return
+
+        if data == "calc|wall":
+            await query.edit_message_text(
+                text="Выберите тип панели:",
+                reply_markup=build_wall_type_keyboard()
+            )
+            logger.info("Handled calc|wall")
+            return
+
+        parts = data.split('|')
+        if parts[0] == "calc_type" and len(parts) == 2:
+            type_name = parts[1]
+            context.user_data['calc_type'] = type_name
+            thicknesses = list(WALL_PRODUCTS[type_name].keys())
+            await query.edit_message_text(
+                text=f"Выбрано: {type_name}. Выберите толщину:",
+                reply_markup=build_thickness_keyboard(thicknesses)
+            )
+            logger.info(f"Handled calc_type|{type_name}")
+            return
+
+        if parts[0] == "thickness" and len(parts) == 2:
+            thickness = int(parts[1])
+            type_name = context.user_data['calc_type']
+            product = WALL_PRODUCTS[type_name][thickness]
+            context.user_data['calc_product'] = product
+            context.user_data['calc_thickness'] = thickness
+            # НОВОЕ: Выбор метода расчёта
+            keyboard = build_method_keyboard()
+            await query.edit_message_text(
+                text=f"Выбрано: {type_name}, {thickness} мм.\n\nКак рассчитать количество?",
+                reply_markup=keyboard
+            )
+            logger.info(f"Handled thickness|{thickness}")
+            return
+
+        # НОВОЕ: Обработка метода расчёта
+        if parts[0] == "calc_method" and len(parts) == 2:
+            method = parts[1]
+            context.user_data['calc_method'] = method
+            product = context.user_data['calc_product']
+            if method == "room":
+                await query.edit_message_text(
+                    text="Введите размеры помещения: длина (м), ширина (м), высота (м).\n"
+                         "Формат: 5, 4, 2.7\n"
+                         "(Это площадь стен без окон/дверей)",
+                    reply_markup=build_back_button()
+                )
+                context.user_data['waiting_for'] = 'room_dimensions'
+                logger.info("Handled calc_method|room")
+            else:  # panels
+                lengths_keyboard = build_length_keyboard(product['panels'])
+                await query.edit_message_text(
+                    text="Выберите длину панели:",
+                    reply_markup=lengths_keyboard
+                )
+                logger.info("Handled calc_method|panels")
+            return
+
+        if parts[0] == "calc_length" and len(parts) == 2:
+            length = int(parts[1])
+            context.user_data['calc_length'] = length
+            await query.edit_message_text(
+                text="Сколько таких панелей нужно? Введите число:",
                 reply_markup=build_back_button()
             )
-            context.user_data['waiting_for'] = 'room_dimensions'
-        else:  # panels
-            lengths_keyboard = build_length_keyboard(product['panels'])
-            await query.edit_message_text("Выберите длину панели:", reply_markup=lengths_keyboard)
-        return
+            context.user_data['waiting_for'] = 'panel_count'
+            logger.info(f"Handled calc_length|{length}")
+            return
 
-    if parts[0] == "calc_length" and len(parts) == 2:
-        length = int(parts[1])
-        context.user_data['calc_length'] = length
+        # Пример обработки back
+        if data.startswith("back|"):
+            await query.edit_message_text(
+                text="Главное меню:",
+                reply_markup=build_main_menu_keyboard()
+            )
+            if 'waiting_for' in context.user_data:
+                del context.user_data['waiting_for']
+            logger.info("Handled back")
+            return
+
+        # Fallback для необработанных
         await query.edit_message_text(
-            "Сколько таких панелей нужно? Введите число:",
-            reply_markup=build_back_button()
+            text="Кнопка не распознана. Попробуйте /start.",
+            reply_markup=build_main_menu_keyboard()
         )
-        context.user_data['waiting_for'] = 'panel_count'
-        return
+        logger.warning(f"Unrecognized button data: {data}")
 
-    # Пример обработки back
-    if data.startswith("back|"):
-        await query.edit_message_text("Главное меню:", reply_markup=build_main_menu_keyboard())
-        if 'waiting_for' in context.user_data:
-            del context.user_data['waiting_for']
-        return
-
-    # ... (добавь обработчики для других кнопок, если нужно, напр. info, catalogs и т.д.)
+    except Exception as e:
+        logger.error(f"Error in button_handler for data '{data}': {e}")
+        try:
+            await query.edit_message_text(
+                text="Произошла ошибка. Попробуйте /start заново.",
+                reply_markup=build_main_menu_keyboard()
+            )
+        except:
+            pass  # Если и edit фейлит
 
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = update.message.text
@@ -448,8 +549,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     thickness = user_data['calc_thickness']
     method = user_data.get('calc_method', 'room')  # По умолчанию room
 
-    if waiting == 'room_dimensions':
-        try:
+    logger.info(f"Message received for waiting '{waiting}': {text[:50]}...")  # DEBUG
+
+    try:
+        if waiting == 'room_dimensions':
             dims = [float(x.strip()) for x in text.split(',')]
             if len(dims) != 3:
                 raise ValueError
@@ -463,11 +566,9 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             )
             user_data['calc_area'] = area_m2
             user_data['waiting_for'] = 'length_choice_after_room'  # Переходим к выбору длины
-        except ValueError:
-            await update.message.reply_text("Неверный формат. Попробуйте: 5, 4, 2.7")
+            return
 
-    elif waiting == 'panel_count':
-        try:
+        elif waiting == 'panel_count':
             count = int(text)
             length = user_data['calc_length']
             panel_info = product['panels'][length]
@@ -487,16 +588,14 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 f"• Вес панелей: {total_weight:.1f} кг\n\n"
                 f"Нужны профили? Или другой расчёт?"
             )
-            await update.message.reply_text(result_text, reply_markup=build_main_menu_keyboard(), parse_mode=ParseMode.HTML)
+            await update.message.reply_text(result_text, reply_markup=build_main_menu_keyboard())
             # Очистка
             user_data.clear()
-        except ValueError:
-            await update.message.reply_text("Введите целое число панелей.")
+            return
 
-    elif waiting == 'length_choice_after_room':
-        # Обработка выбора длины после ввода размеров (предполагаем, что это callback, но для message - fallback)
-        try:
-            length = int(text)  # Если ввод числа; иначе используй кнопки
+        elif waiting == 'length_choice_after_room':
+            # Для message fallback (но лучше кнопки); парсим как calc_length callback
+            length = int(text)  # Если ввод числа
             if length not in product['panels']:
                 raise ValueError
             area = user_data['calc_area']
@@ -518,17 +617,50 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 f"• Вес панелей: {total_weight:.1f} кг\n\n"
                 f"Учитывайте +10% на подрезку. Нужны профили?"
             )
-            await update.message.reply_text(result_text, reply_markup=build_main_menu_keyboard(), parse_mode=ParseMode.HTML)
+            await update.message.reply_text(result_text, reply_markup=build_main_menu_keyboard())
             user_data.clear()
-        except ValueError:
-            await update.message.reply_text("Выберите длину из кнопок или введите число из доступных (2440, 2600 и т.д.).")
+            return
 
-    # ... (другие waiting_for для профилей, реек и т.д. остаются)
+        # ... (другие waiting_for для профилей, реек и т.д. остаются)
+
+    except ValueError:
+        if waiting == 'room_dimensions':
+            await update.message.reply_text("Неверный формат. Попробуйте: 5, 4, 2.7")
+        elif waiting == 'panel_count':
+            await update.message.reply_text("Введите целое число панелей.")
+        elif waiting == 'length_choice_after_room':
+            await update.message.reply_text("Выберите длину из кнопок или введите число из доступных (2440, 2600 и т.д.).")
+    except Exception as e:
+        logger.error(f"Error in message_handler for waiting '{waiting}': {e}")
+        await update.message.reply_text("Ошибка в расчёте. Попробуйте заново.", reply_markup=build_main_menu_keyboard())
+
+# Error handler для всего приложения
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.warning(f"Update {getattr(update, 'update_id', 'N/A')} caused error {context.error}")
+    # Отправляем пользователю, если возможно
+    if update and hasattr(update, 'effective_chat') and update.effective_chat:
+        try:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="Произошла ошибка. Попробуйте /start заново.",
+                reply_markup=build_main_menu_keyboard()
+            )
+        except Exception as e2:
+            logger.error(f"Failed to send fallback to user: {e2}")
+    # Админу
+    try:
+        await context.bot.send_message(
+            chat_id=ADMIN_CHAT_ID,
+            text=f"Ошибка: {context.error}\nUpdate ID: {getattr(update, 'update_id', 'N/A')}"
+        )
+    except:
+        pass
 
 # Регистрация обработчиков (ДО init!)
 tg_application.add_handler(CommandHandler("start", start))
 tg_application.add_handler(CallbackQueryHandler(button_handler))
 tg_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
+tg_application.add_error_handler(error_handler)
 
 # ============================
 #   TELEGRAM APP INIT/SHUTDOWN
@@ -574,6 +706,8 @@ def webhook():
 
         update = Update.de_json(json_data, tg_application.bot)
         if update:
+            if update.callback_query:
+                logger.info(f"Received callback_query from user {update.callback_query.from_user.id}, data='{update.callback_query.data}'")  # DEBUG
             loop = get_event_loop()
             loop.run_until_complete(tg_application.process_update(update))
             logger.info(f"Processed update: {update.update_id}")
