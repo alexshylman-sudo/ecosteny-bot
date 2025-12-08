@@ -9,7 +9,7 @@ import re
 import math
 import logging
 import traceback
-import sys  # For flush
+import sys
 
 import requests
 from flask import Flask, request, jsonify
@@ -33,12 +33,12 @@ except ImportError as e:
     print(f"Import error: {e}", flush=True)
     raise
 
-# Настройка логирования (DEBUG + flush для Render)
+# Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.DEBUG,
     stream=sys.stdout,
-    force=True  # Override if needed
+    force=True
 )
 logger = logging.getLogger(__name__)
 
@@ -361,7 +361,8 @@ def init_tg_app():
         print("Step 0: Init app", flush=True)
         try:
             tg_application = Application.builder().token(TG_BOT_TOKEN).build()
-            print("Step 0.1: Application built", flush=True)
+            tg_application.initialize()  # FIX: Explicit initialize!
+            print("Step 0.1: Application built and initialized", flush=True)
 
             # Add handlers
             tg_application.add_handler(CommandHandler("start", start))
@@ -622,6 +623,11 @@ def webhook():
             logger.error("Failed to parse Update")
             return jsonify({'status': 'ok'}), 200
 
+        # Ensure started if not
+        if not tg_application.running:
+            asyncio.run(tg_application.start())
+            print("Step 3.2: App started", flush=True)
+
         asyncio.run(tg_application.process_update(update))
         print("Step 4: Update processed", flush=True)
         return jsonify({'status': 'ok'}), 200
@@ -629,7 +635,7 @@ def webhook():
         error_msg = f"Webhook error: {e}\n{traceback.format_exc()}"
         logger.error(error_msg)
         print(error_msg, flush=True)
-        return jsonify({'status': 'error', 'details': str(e)}), 200  # Always 200
+        return jsonify({'status': 'error', 'details': str(e)}), 200
 
 @app.route('/', methods=['GET'])
 def health():
