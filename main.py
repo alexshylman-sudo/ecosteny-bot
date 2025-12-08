@@ -16,8 +16,8 @@ from telegram import (
     Update,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
-    ParseMode,
 )
+from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -528,7 +528,8 @@ ____________________________________________________________
         var = PANELS_3D[item['var']]
         area_m2 = var['area_m2']
         price = var['price_rub']
-        net_area = wall_width_m * wall_height_m - deduct_area_m2
+        gross_area = wall_width_m * wall_height_m
+        net_area = gross_area - deduct_area_m2
         panels = math.ceil(net_area / area_m2)
         total_area = panels * area_m2
         waste_area = total_area - net_area
