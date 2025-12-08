@@ -16,6 +16,7 @@ from telegram import (
     Update,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    ParseMode,
 )
 from telegram.ext import (
     Application,
@@ -455,35 +456,49 @@ def parse_size(text: str, unit: str) -> float:
 def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit) -> tuple[str, int]:
     category = item['category']
     cost = 0
-    if category in ['walls']:
+    if category == 'walls':
         title = PRODUCT_CODES[item['product_code']]
         thickness = item.get('thickness', 0)
         length_mm = item['length']
         panel = WALL_PRODUCTS[title][thickness]['panels'][length_mm]
         area_m2 = panel['area_m2']
         price = panel['price_rub']
-        net_area = wall_width_m * wall_height_m - deduct_area_m2
-        required_area = net_area * 1.1  # 10% reserve
-        panels = math.ceil(required_area / area_m2)
+        panel_width_mm = WALL_PRODUCTS[title][thickness]['width_mm']
+        gross_area = wall_width_m * wall_height_m
+        net_area = gross_area - deduct_area_m2
+        panels = math.ceil(net_area / area_m2)
         total_area = panels * area_m2
         waste_area = total_area - net_area
         waste_pct = (waste_area / total_area) * 100 if total_area > 0 else 0
         cost = panels * price
-        result_text = f"""
-Выбранный материал: {title}
-Толщина: {thickness} мм (если применимо)
-Высота: {length_mm} мм
-Название/артикул: {item.get('custom_name', 'Не указано')}
-📏 Ширина зоны: {wall_width_m * 1000 if unit == 'mm' else wall_width_m} {unit}
-📏 Площадь зоны: {wall_width_m} м × {wall_height_m} м = {wall_width_m * wall_height_m} м²
-📏 Вычет (окна/двери): {deduct_area_m2} м²
-📏 Чистая площадь: {net_area} м²
-📦 Площадь панели: {area_m2} м²
-📦 Количество: {panels} шт.
-📦 Общая площадь: {total_area} м²
-📏 Отходы: {waste_area:.2f} м² ({waste_pct:.2f}%)
-💰 Стоимость: {cost} ₽
-"""
+        custom_name = item.get('custom_name', 'Стандартный')
+        width_mm = wall_width_m * 1000
+        width_m = wall_width_m
+        result_text = f"""Выбранный материал: {title}  
+Толщина: {thickness} мм  
+Высота: {length_mm} мм  
+Название/артикул клиента: **«{custom_name}»**  
+
+🔹 Ширина зоны отделки: {width_mm:.1f} мм (или {width_m:.2f} м)  
+🔹 Площадь зоны отделки: {width_m:.2f} м × {wall_height_m:.1f} м = {gross_area:.2f} м²  
+🔹 Площадь к вычету (окна/двери): {deduct_area_m2:.2f} м²  
+🔹 Общая площадь для покрытия: {gross_area:.2f} м² - {deduct_area_m2:.2f} м² = {net_area:.2f} м²  
+
+🔸 Площадь одной панели ({length_mm} мм × {panel_width_mm} мм): {area_m2} м²  
+🔸 Необходимое количество панелей: {net_area:.2f} м² ÷ {area_m2} м² ≈ {net_area / area_m2:.2f} (округляем до {panels} панелей)  
+🔸 Общая площадь закупаемых панелей: {panels} панелей × {area_m2} м² = {total_area:.1f} м²  
+
+🔹 Отходы:  
+- Площадь отходов: {total_area:.1f} м² - {net_area:.2f} м² = {waste_area:.2f} м²  
+- Процент отходов: ({waste_area:.2f} м² ÷ {total_area:.1f} м²) × 100 ≈ {waste_pct:.2f}%  
+
+💰 Ориентировочная стоимость: {panels} панелей × {price:,} ₽ = {cost:,} ₽  
+
+____________________________________________________________  
+Итог:  
+- Необходимое количество панелей: {panels}  
+- Общая стоимость: {cost:,} ₽  
+- Отходы: {waste_area:.2f} м² ({waste_pct:.2f}%)"""
     elif category == 'profiles':
         thickness = item['thickness']
         type_name = item['type']
@@ -514,8 +529,7 @@ def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit) -> t
         area_m2 = var['area_m2']
         price = var['price_rub']
         net_area = wall_width_m * wall_height_m - deduct_area_m2
-        required_area = net_area * 1.1
-        panels = math.ceil(required_area / area_m2)
+        panels = math.ceil(net_area / area_m2)
         total_area = panels * area_m2
         waste_area = total_area - net_area
         waste_pct = (waste_area / total_area) * 100 if total_area > 0 else 0
@@ -643,8 +657,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if completed:
                 full_text = "\n\n".join([text for text, _ in completed])
                 total_cost = sum(cost for _, cost in completed)
-                full_text += f"\n\n🎉 Общая стоимость всех материалов: {total_cost} ₽"
-                await query.edit_message_text(full_text)
+                full_text += f"\n\n🎉 Общая стоимость всех материалов: {total_cost:,} ₽"
+                await query.edit_message_text(full_text, parse_mode=ParseMode.MARKDOWN)
                 stats = load_stats()
                 stats['calc_count'] += 1
                 stats['calc_today'] += 1
@@ -695,7 +709,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 unit = context.user_data.get('unit', 'm')
                 result_text, cost = calculate_item(item, width, height, deduct, unit)
                 context.chat_data['completed_calcs'].append((result_text, cost))
-                await query.edit_message_text(result_text + "\n\nДобавить ещё материал?", reply_markup=build_add_another_keyboard())
+                await query.edit_message_text(result_text, parse_mode=ParseMode.MARKDOWN)
+                await context.bot.send_message(query.message.chat_id, "Добавить ещё материал?", reply_markup=build_add_another_keyboard())
                 context.chat_data['phase'] = None
             else:
                 await query.edit_message_text("Есть двери? (Да/Нет)", reply_markup=build_yes_no_keyboard("dver|yes", "dver|no"))
