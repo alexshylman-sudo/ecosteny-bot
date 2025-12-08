@@ -194,23 +194,12 @@ WALL_PRODUCTS = {
     },
 }
 
-SPC_PRODUCTS = {
-    "SPC Панель": {  # Без толщины
-        "width_mm": 1220,
-        "panels": {
-            2440: {"area_m2": 2.928, "price_rub": 9500},
-            2600: {"area_m2": 3.12, "price_rub": 10100},
-        },
-    },
-}
-
 PRODUCT_CODES = {
     "wpc_charcoal": "WPC Бамбук угольный",
     "wpc_bamboo": "WPC Бамбук",
     "wpc_hd": "WPC повышенной плотности",
     "wpc_bamboo_coat": "WPC Бамбук с защитным слоем",
     "wpc_hd_coat": "WPC повышенной плотности с защитным слоем",
-    "spc_panel": "SPC Панель",
 }
 
 PROFILES = {
@@ -306,7 +295,6 @@ def build_back_button(text="Назад"):
 def build_calc_category_keyboard() -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton("🧱 Стеновые панели WPC", callback_data="calc_cat|walls")],
-        [InlineKeyboardButton("🔲 SPC панель", callback_data="calc_cat|spc")],
         [InlineKeyboardButton("🔩 Профили", callback_data="calc_cat|profiles")],
         [InlineKeyboardButton("📏 Реечные панели", callback_data="calc_cat|slats")],
         [InlineKeyboardButton("🎨 3D-панели", callback_data="calc_cat|3d")],
@@ -331,11 +319,8 @@ def build_thickness_keyboard(code: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(buttons)
 
 def build_length_keyboard(code: str, thick: int) -> InlineKeyboardMarkup:
-    if code == "spc_panel":
-        lengths = SPC_PRODUCTS["SPC Панель"]["panels"].keys()
-    else:
-        title = PRODUCT_CODES[code]
-        lengths = WALL_PRODUCTS[title][thick]['panels'].keys()
+    title = PRODUCT_CODES[code]
+    lengths = WALL_PRODUCTS[title][thick]['panels'].keys()
     buttons = [[InlineKeyboardButton(f"{length} мм", callback_data=f"length|{code}|{thick}|{length}")] for length in lengths]
     buttons += build_back_button("Назад")
     return InlineKeyboardMarkup(buttons)
@@ -470,17 +455,11 @@ def parse_size(text: str, unit: str) -> float:
 def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit) -> tuple[str, int]:
     category = item['category']
     cost = 0
-    if category in ['walls', 'spc']:
-        if category == 'spc':
-            title = "SPC Панель"
-            thickness = 0  # Dummy
-            length_mm = item['length']
-            panel = SPC_PRODUCTS[title]["panels"][length_mm]
-        else:
-            title = PRODUCT_CODES[item['product_code']]
-            thickness = item.get('thickness', 0)
-            length_mm = item['length']
-            panel = WALL_PRODUCTS[title][thickness]['panels'][length_mm]
+    if category in ['walls']:
+        title = PRODUCT_CODES[item['product_code']]
+        thickness = item.get('thickness', 0)
+        length_mm = item['length']
+        panel = WALL_PRODUCTS[title][thickness]['panels'][length_mm]
         area_m2 = panel['area_m2']
         price = panel['price_rub']
         net_area = wall_width_m * wall_height_m - deduct_area_m2
@@ -593,8 +572,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.chat_data['current_cat'] = cat
         if cat == 'walls':
             await query.edit_message_text("Выберите тип WPC:", reply_markup=build_wall_product_keyboard())
-        elif cat == 'spc':
-            await query.edit_message_text("Выберите тип SPC:", reply_markup=build_wall_product_keyboard(is_spc=True))
         elif cat == 'profiles':
             await query.edit_message_text("Выберите толщину профиля:", reply_markup=build_profile_thickness_keyboard())
         elif cat == 'slats':
@@ -607,10 +584,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         code = parts[1]
         context.chat_data['product_code'] = code
         title = PRODUCT_CODES[code]
-        if title == "SPC Панель":
-            await query.edit_message_text("Выберите длину SPC:", reply_markup=build_length_keyboard(code, 0))
-        else:
-            await query.edit_message_text("Выберите толщину:", reply_markup=build_thickness_keyboard(code))
+        await query.edit_message_text("Выберите толщину:", reply_markup=build_thickness_keyboard(code))
     elif action == 'thickness':
         code = parts[1]
         thick = int(parts[2])
@@ -620,7 +594,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         code = parts[1]
         thick = int(parts[2])
         length = int(parts[3])
-        cat = 'spc' if code == 'spc_panel' else 'walls'
+        cat = 'walls'
         item = {'category': cat, 'product_code': code, 'thickness': thick, 'length': length}
         context.chat_data['current_item'] = item
         await query.edit_message_text("Знаете точное название/артикул материала?", reply_markup=build_custom_name_keyboard())
@@ -630,9 +604,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.chat_data['phase'] = 'custom_name'
             await query.edit_message_text("Введите название/артикул:")
         else:
-            # Proceed to units
-            context.chat_data['phase'] = 'units'
-            await query.edit_message_text("В каких единицах удобнее работать?", reply_markup=build_units_keyboard())
+            # Proceed to units or wall_width
+            await proceed_to_wall_input(query, context)
     elif action == 'profile_thick':
         thick = int(parts[1])
         context.chat_data['thickness'] = thick
@@ -647,19 +620,17 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         slat_type = parts[1]
         item = {'category': 'slats', 'type': slat_type}
         context.chat_data['current_item'] = item
-        # Proceed to units directly (no custom name for slats)
-        context.chat_data['phase'] = 'units'
-        await query.edit_message_text("В каких единицах удобнее работать?", reply_markup=build_units_keyboard())
+        # Proceed to units or wall_width
+        await proceed_to_wall_input(query, context)
     elif action == '3d_size':
         var = parts[1]
         item = {'category': '3d', 'var': var}
         context.chat_data['current_item'] = item
-        # Proceed to units
-        context.chat_data['phase'] = 'units'
-        await query.edit_message_text("В каких единицах удобнее работать?", reply_markup=build_units_keyboard())
+        # Proceed to units or wall_width
+        await proceed_to_wall_input(query, context)
     elif action == 'units':
         unit = parts[1]
-        context.chat_data['unit'] = unit
+        context.user_data['unit'] = unit
         context.chat_data['phase'] = 'wall_width'
         await query.edit_message_text(f"Введите ширину стены ({unit}):")
     elif action == 'add_another':
@@ -708,10 +679,10 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif action.startswith('okno') or action.startswith('dver'):
         phase_key = 'windows' if action.startswith('okno') else 'doors'
         if parts[1] == 'yes':
-            size_phase = f"{phase_key}_size"
-            context.chat_data['phase'] = size_phase
-            unit = context.chat_data['unit']
-            await query.edit_message_text(f"Введите размеры {phase_key[:-1]} (ширина x высота, в {unit}):")
+            context.chat_data['current_opening_type'] = phase_key  # Запоминаем тип (окно или дверь)
+            context.chat_data['phase'] = 'opening_width'
+            unit = context.user_data.get('unit', 'm')
+            await query.edit_message_text(f"Введите ширину {phase_key[:-1]} (в {unit}):")
         else:
             next_action = 'dver' if action.startswith('okno') else 'finish_calc'
             if next_action == 'finish_calc':
@@ -720,14 +691,22 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 width = context.chat_data['wall_width_m']
                 height = context.chat_data['wall_height_m']
                 deduct = context.chat_data['deduct_area']
-                unit = context.chat_data['unit']
+                unit = context.user_data.get('unit', 'm')
                 result_text, cost = calculate_item(item, width, height, deduct, unit)
                 context.chat_data['completed_calcs'].append((result_text, cost))
                 await query.edit_message_text(result_text + "\n\nДобавить ещё материал?", reply_markup=build_add_another_keyboard())
                 context.chat_data['phase'] = None
             else:
                 await query.edit_message_text("Есть двери? (Да/Нет)", reply_markup=build_yes_no_keyboard("dver|yes", "dver|no"))
-    # Partner role handled above
+
+async def proceed_to_wall_input(query, context):
+    unit = context.user_data.get('unit')
+    if unit:
+        context.chat_data['phase'] = 'wall_width'
+        await query.edit_message_text(f"Введите ширину стены ({unit}):")
+    else:
+        context.chat_data['phase'] = 'units'
+        await query.edit_message_text("В каких единицах удобнее работать?", reply_markup=build_units_keyboard())
 
 # ============================
 #   MESSAGE HANDLER
@@ -759,7 +738,9 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             'role': context.chat_data.get('partner_role'),
             'message': text
         }
-        msg = f"Новая заявка партнёра:\n👤 Имя: {partner_data['name']}\n🏙️ Город: {partner_data['city']}\n📱 Тел: {partner_data['phone']}\n🔹 Роль: {partner_data['role']}\n💬 Сообщение: {partner_data['message']}"
+        username = update.effective_user.username
+        username_str = f"@{username}" if username else "Без никнейма"
+        msg = f"Новая заявка партнёра от {username_str}:\n👤 Имя: {partner_data['name']}\n🏙️ Город: {partner_data['city']}\n📱 Тел: {partner_data['phone']}\n🔹 Роль: {partner_data['role']}\n💬 Сообщение: {partner_data['message']}"
         await context.bot.send_message(ADMIN_CHAT_ID, msg)
         await update.message.reply_text("Спасибо! Менеджер свяжется с вами в ближайшее время.\n\n😊 Добро пожаловать в команду ECO Стены!", reply_markup=build_main_menu_keyboard())
         # Reset
@@ -768,8 +749,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         item = context.chat_data['current_item']
         item['custom_name'] = text
         context.chat_data['current_item'] = item
-        context.chat_data['phase'] = 'units'
-        await update.message.reply_text("В каких единицах удобнее работать?", reply_markup=build_units_keyboard())
+        await proceed_to_wall_input(update.callback_query, context)  # Используем None для query, но лучше адаптировать
     elif phase == 'profile_qty':
         try:
             qty = int(text)
@@ -777,7 +757,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             width = context.chat_data.get('wall_width_m', 0)  # For profiles, assume wall width if set, else prompt? But for simplicity, proceed to calc assuming qty is total
             height = context.chat_data.get('wall_height_m', 0)
             deduct = context.chat_data.get('deduct_area', 0)
-            unit = context.chat_data.get('unit', 'm')
+            unit = context.user_data.get('unit', 'm')
             result_text, cost = calculate_item(item, width or 1, height or 1, deduct, unit)  # Dummy if no dims
             context.chat_data['completed_calcs'].append((result_text, cost))
             await update.message.reply_text(result_text + "\n\nДобавить ещё материал?", reply_markup=build_add_another_keyboard())
@@ -785,15 +765,15 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             await update.message.reply_text("Непонял количество. Попробуйте заново.")
     elif phase == 'wall_width':
-        width = parse_size(text, context.chat_data['unit'])
+        width = parse_size(text, context.user_data.get('unit', 'm'))
         if width <= 0:
             await update.message.reply_text("Неверное значение. Введите ширину заново:")
             return
         context.chat_data['wall_width_m'] = width
         context.chat_data['phase'] = 'wall_height'
-        await update.message.reply_text(f"Введите высоту стены ({context.chat_data['unit']}):")
+        await update.message.reply_text(f"Введите высоту стены ({context.user_data.get('unit', 'm')}):")
     elif phase == 'wall_height':
-        height = parse_size(text, context.chat_data['unit'])
+        height = parse_size(text, context.user_data.get('unit', 'm'))
         if height <= 0:
             await update.message.reply_text("Неверное значение. Введите высоту заново:")
             return
@@ -803,38 +783,26 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.chat_data['doors'] = []
         context.chat_data['deduct_area'] = 0.0
         await update.message.reply_text("Есть окна? (Да/Нет)", reply_markup=build_yes_no_keyboard("okno|yes", "okno|no"))
-    elif phase == 'window_size':  # Русский: окно
-        sizes = re.split(r'[xX×x]', text)  # Поддержка ×
-        if len(sizes) == 2:
-            try:
-                w = parse_size(sizes[0].strip(), context.chat_data['unit'])
-                h = parse_size(sizes[1].strip(), context.chat_data['unit'])
-                area = w * h
-                if area <= 0:
-                    raise ValueError
-                context.chat_data['windows'].append(area)
-                context.chat_data['deduct_area'] += area
-                await update.message.reply_text("Окно добавлено. Ещё окно? (Да/Нет)", reply_markup=build_yes_no_keyboard("okno|yes", "okno|no"))
-            except:
-                await update.message.reply_text("Неверный формат. Пример: 1.2 x 0.9")
-        else:
-            await update.message.reply_text("Неверный формат. Используйте 'ширина x высота'")
-    elif phase == 'door_size':  # Русский: дверь
-        sizes = re.split(r'[xX×x]', text)  # Поддержка ×
-        if len(sizes) == 2:
-            try:
-                w = parse_size(sizes[0].strip(), context.chat_data['unit'])
-                h = parse_size(sizes[1].strip(), context.chat_data['unit'])
-                area = w * h
-                if area <= 0:
-                    raise ValueError
-                context.chat_data['doors'].append(area)
-                context.chat_data['deduct_area'] += area
-                await update.message.reply_text("Дверь добавлена. Ещё дверь? (Да/Нет)", reply_markup=build_yes_no_keyboard("dver|yes", "dver|no"))
-            except:
-                await update.message.reply_text("Неверный формат. Пример: 1.2 x 0.9")
-        else:
-            await update.message.reply_text("Неверный формат. Используйте 'ширина x высота'")
+    elif phase == 'opening_width':
+        w = parse_size(text, context.user_data.get('unit', 'm'))
+        if w <= 0:
+            await update.message.reply_text("Неверное значение. Введите ширину заново:")
+            return
+        context.chat_data['temp_opening_width'] = w
+        context.chat_data['phase'] = 'opening_height'
+        await update.message.reply_text(f"Введите высоту {context.chat_data['current_opening_type'][:-1]} (в {context.user_data.get('unit', 'm')}):")
+    elif phase == 'opening_height':
+        h = parse_size(text, context.user_data.get('unit', 'm'))
+        if h <= 0:
+            await update.message.reply_text("Неверное значение. Введите высоту заново:")
+            return
+        area = context.chat_data['temp_opening_width'] * h
+        phase_key = context.chat_data['current_opening_type']
+        context.chat_data[phase_key].append(area)
+        context.chat_data['deduct_area'] += area
+        opening_name = "окна" if phase_key == 'windows' else "двери"
+        await update.message.reply_text(f"{opening_name.capitalize()[:-1]} добавлено. Ещё {opening_name[:-1]}? (Да/Нет)", reply_markup=build_yes_no_keyboard(f"{phase_key[:-1]}|yes", f"{phase_key[:-1]}|no"))
+        context.chat_data['phase'] = None  # Reset temp
     elif phase == 'broadcast':
         # Send to group
         await context.bot.send_message(TG_GROUP, text)
