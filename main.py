@@ -16,8 +16,8 @@ from telegram import (
     Update,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    ParseMode,
 )
-from telegram.constants import ParseMode
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -484,8 +484,7 @@ def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit, calc
         num_rows = 1 if calc_mode == 'panel' else math.ceil(wall_height_m / panel_h_m)
         num_cols = math.ceil(wall_width_m / panel_w_m)
         total_panels_approx = num_rows * num_cols
-        required_area = net_area * 1.1  # 10% reserve
-        panels = max(total_panels_approx, math.ceil(required_area / area_m2))
+        panels = total_panels_approx
         total_area = panels * area_m2
         waste_area = total_area - net_area
         waste_pct = (waste_area / total_area) * 100 if total_area > 0 else 0
