@@ -682,7 +682,8 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.chat_data['current_opening_type'] = phase_key  # Запоминаем тип (окно или дверь)
             context.chat_data['phase'] = 'opening_width'
             unit = context.user_data.get('unit', 'm')
-            await query.edit_message_text(f"Введите ширину {phase_key[:-1]} (в {unit}):")
+            opening_single = "окна" if phase_key == 'windows' else "двери"
+            await query.edit_message_text(f"Введите ширину {opening_single[:-1]} (в {unit}):")
         else:
             next_action = 'dver' if action.startswith('okno') else 'finish_calc'
             if next_action == 'finish_calc':
@@ -749,7 +750,13 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         item = context.chat_data['current_item']
         item['custom_name'] = text
         context.chat_data['current_item'] = item
-        await proceed_to_wall_input(update.callback_query, context)  # Используем None для query, но лучше адаптировать
+        unit = context.user_data.get('unit')
+        if unit:
+            context.chat_data['phase'] = 'wall_width'
+            await update.message.reply_text(f"Введите ширину стены ({unit}):")
+        else:
+            context.chat_data['phase'] = 'units'
+            await update.message.reply_text("В каких единицах удобнее работать?", reply_markup=build_units_keyboard())
     elif phase == 'profile_qty':
         try:
             qty = int(text)
@@ -790,7 +797,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         context.chat_data['temp_opening_width'] = w
         context.chat_data['phase'] = 'opening_height'
-        await update.message.reply_text(f"Введите высоту {context.chat_data['current_opening_type'][:-1]} (в {context.user_data.get('unit', 'm')}):")
+        opening_single = "окна" if context.chat_data['current_opening_type'] == 'windows' else "двери"
+        await update.message.reply_text(f"Введите высоту {opening_single[:-1]} (в {context.user_data.get('unit', 'm')}):")
     elif phase == 'opening_height':
         h = parse_size(text, context.user_data.get('unit', 'm'))
         if h <= 0:
@@ -800,8 +808,17 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         phase_key = context.chat_data['current_opening_type']
         context.chat_data[phase_key].append(area)
         context.chat_data['deduct_area'] += area
-        opening_name = "окна" if phase_key == 'windows' else "двери"
-        await update.message.reply_text(f"{opening_name.capitalize()[:-1]} добавлено. Ещё {opening_name[:-1]}? (Да/Нет)", reply_markup=build_yes_no_keyboard(f"{phase_key[:-1]}|yes", f"{phase_key[:-1]}|no"))
+        if phase_key == 'windows':
+            added_text = "Окно добавлено"
+            more_text = "окно"
+            yes_data = "okno|yes"
+            no_data = "okno|no"
+        else:
+            added_text = "Дверь добавлена"
+            more_text = "дверь"
+            yes_data = "dver|yes"
+            no_data = "dver|no"
+        await update.message.reply_text(f"{added_text}. Ещё {more_text}? (Да/Нет)", reply_markup=build_yes_no_keyboard(yes_data, no_data))
         context.chat_data['phase'] = None  # Reset temp
     elif phase == 'broadcast':
         # Send to group
