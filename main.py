@@ -9,6 +9,7 @@ import re
 import math
 import logging
 import threading  # Для thread-safety
+import atexit  # Для shutdown
 
 import requests
 from flask import Flask, request, jsonify
@@ -524,10 +525,34 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     # ... (другие waiting_for для профилей, реек и т.д. остаются)
 
-# Регистрация обработчиков
+# Регистрация обработчиков (ДО init!)
 tg_application.add_handler(CommandHandler("start", start))
 tg_application.add_handler(CallbackQueryHandler(button_handler))
 tg_application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
+
+# ============================
+#   TELEGRAM APP INIT/SHUTDOWN
+# ============================
+
+async def init_telegram_app():
+    """Инициализация Telegram Application."""
+    loop = get_event_loop()
+    await tg_application.initialize()
+    logger.info("Telegram Application initialized successfully.")
+
+async def shutdown_telegram_app():
+    """Shutdown Telegram Application."""
+    loop = get_event_loop()
+    await tg_application.shutdown()
+    logger.info("Telegram Application shut down.")
+
+# Вызов init при запуске
+def startup():
+    loop = get_event_loop()
+    loop.run_until_complete(init_telegram_app())
+
+# Регистрация shutdown
+atexit.register(lambda: asyncio.run(shutdown_telegram_app()))
 
 # ============================
 #   FLASK ROUTES (WEBHOOK)
@@ -542,10 +567,18 @@ def index():
 def webhook():
     """Telegram webhook handler."""
     try:
-        update = Update.de_json(request.get_json(force=True), tg_application.bot)
+        json_data = request.get_json(force=True)
+        if not json_data:
+            logger.warning("Empty JSON in webhook")
+            return jsonify({"status": "Empty update"}), 200
+
+        update = Update.de_json(json_data, tg_application.bot)
         if update:
             loop = get_event_loop()
             loop.run_until_complete(tg_application.process_update(update))
+            logger.info(f"Processed update: {update.update_id}")
+        else:
+            logger.warning("Invalid update JSON")
         return jsonify({"status": "OK"}), 200
     except TelegramError as e:
         logger.error(f"Telegram error in webhook: {e}")
@@ -555,6 +588,8 @@ def webhook():
         return jsonify({"status": "Error", "message": str(e)}), 500
 
 if __name__ == "__main__":
+    # Инициализация при запуске
+    startup()
     # Для локального запуска (используй ngrok для теста webhook)
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
