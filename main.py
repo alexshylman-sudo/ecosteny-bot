@@ -794,9 +794,17 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif sub == 'prices':
             await query.edit_message_text("Прайсы:", reply_markup=build_prices_keyboard())
         elif sub == 'download_profiles':
-            await context.bot.send_document(chat_id=query.message.chat_id, document="https://ecosteni.ru/wp-content/uploads/2025/12/profili.xlsx", caption="Прайс на профили")
+            response = requests.get("https://ecosteni.ru/wp-content/uploads/2025/12/profili.xlsx")
+            if response.status_code == 200:
+                await context.bot.send_document(chat_id=query.message.chat_id, document=BytesIO(response.content), filename="profili.xlsx", caption="Прайс на профили")
+            else:
+                await query.edit_message_text("Не удалось скачать файл профилей.")
         elif sub == 'download_slats':
-            await context.bot.send_document(chat_id=query.message.chat_id, document="https://ecosteni.ru/wp-content/uploads/2025/12/rejki.xlsx", caption="Прайс на рейки")
+            response = requests.get("https://ecosteni.ru/wp-content/uploads/2025/12/rejki.xlsx")
+            if response.status_code == 200:
+                await context.bot.send_document(chat_id=query.message.chat_id, document=BytesIO(response.content), filename="rejki.xlsx", caption="Прайс на рейки")
+            else:
+                await query.edit_message_text("Не удалось скачать файл реек.")
     elif action == 'partner_role':
         role_map = {
             'retail': 'Розничный магазин',
