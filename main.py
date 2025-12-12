@@ -51,7 +51,7 @@ if not TG_BOT_TOKEN:
     raise ValueError("Установите TG_BOT_TOKEN в .env!")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-ADMIN_CHAT_IDS = {203473623, 490825527}  # ИЗ ответа пользователя, добавлен второй администратор
+ADMIN_CHAT_IDS = [203473623, 490825527]
 
 WELCOME_PHOTO_URL = "https://ecosteni.ru/wp-content/uploads/2025/11/qncccaze.jpg"
 PRESENTATION_URL = "https://ecosteni.ru/wp-content/uploads/2025/11/ecosteny_prezentacziya.pdf"
@@ -293,7 +293,7 @@ def build_main_menu_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("📞 Контактная информация", callback_data="main|contacts")],
         [InlineKeyboardButton("🤝 Хочу стать партнёром", callback_data="main|partner")],
     ]
-    if ADMIN_CHAT_IDS:
+    if ADMIN_CHAT_ID:
         buttons.append([InlineKeyboardButton("⚙️ Администрирование", callback_data="main|admin")])
     return InlineKeyboardMarkup(buttons)
 
@@ -411,6 +411,7 @@ def build_admin_keyboard() -> InlineKeyboardMarkup:
     buttons = [
         [InlineKeyboardButton("📊 Сатистика", callback_data="admin|stats")],
         [InlineKeyboardButton("📢 Рассылка", callback_data="admin|broadcast")],
+        [InlineKeyboardButton("💰 Расчет стоимости и веса", callback_data="admin|cost_calc")],
     ]
     buttons += build_back_button("Назад")
     return InlineKeyboardMarkup(buttons)
@@ -632,10 +633,22 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.chat_data['phase'] = 'partner_name'
             await query.edit_message_text("🤝 Хочу стать партнёром!\n\nКак к вам обращаться? (Введите имя)")
         elif sub == 'admin':
-            if update.effective_user.id in ADMIN_CHAT_IDS:
+            if update.effective_user.id == ADMIN_CHAT_ID:
                 await query.edit_message_text("Администрирование:", reply_markup=build_admin_keyboard())
             else:
                 await query.edit_message_text("Доступ запрещён.")
+    elif action == 'admin':
+        sub = parts[1]
+        if sub == 'stats':
+            stats = load_stats()
+            text = f"Пользователей сегодня: {len(stats['users_today'])}\nРасчётов сегодня: {stats['calc_today']}\nВсего пользователей: {len(stats['users'])}\nВсего расчётов: {stats['calc_count']}"
+            await query.edit_message_text(text)
+        elif sub == 'broadcast':
+            context.chat_data['phase'] = 'broadcast'
+            await query.edit_message_text("Введите текст для рассылки в группу:")
+        elif sub == 'cost_calc':
+            context.chat_data['is_admin_cost'] = True
+            await query.edit_message_text("Выберите тип WPC для расчета:", reply_markup=build_wall_product_keyboard())
     elif action == 'calc_cat':
         cat = parts[1]
         context.chat_data['current_cat'] = cat
@@ -668,7 +681,23 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cat = 'walls'
         item = {'category': cat, 'product_code': code, 'thickness': thick, 'length': length, 'available_lengths': available_lengths}
         context.chat_data['current_item'] = item
-        await query.edit_message_text("Знаете точное название/артикул материала?", reply_markup=build_custom_name_keyboard())
+        if context.chat_data.pop('is_admin_cost', False):
+            area_m2 = WALL_PRODUCTS[title][thick]['panels'][length]['area_m2']
+            weight_per_m2 = WALL_PRODUCTS[title][thick]['weight_per_m2']
+            price_rub = WALL_PRODUCTS[title][thick]['panels'][length]['price_rub']
+            context.chat_data['admin_cost_params'] = {
+                'title': title,
+                'thick': thick,
+                'length': length,
+                'area_m2': area_m2,
+                'weight_per_m2': weight_per_m2,
+                'price_rub': price_rub
+            }
+            text = f"<b>Выбрана панель:</b>\n{title}\nТолщина: {thick} мм\nДлина: {length} мм\nПлощадь: {area_m2} м²\nВес/м²: {weight_per_m2} кг\nЦена: {price_rub:,} ₽\n\nВведите <b>Себестоимость в юанях</b> (за 1 м²):"
+            context.chat_data['phase'] = 'admin_cost_yuan'
+            await query.edit_message_text(text, parse_mode=ParseMode.HTML)
+        else:
+            await query.edit_message_text("Знаете точное название/артикул материала?", reply_markup=build_custom_name_keyboard())
     elif action == 'custom_name':
         item = context.chat_data['current_item']
         if parts[1] == 'yes':
@@ -773,15 +802,6 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(query.message.chat_id, "Расчёт завершён! Вернуться в меню?", reply_markup=build_main_menu_keyboard())
     elif action == 'back':
         await query.edit_message_text("Главное меню:", reply_markup=build_main_menu_keyboard())
-    elif action == 'admin':
-        sub = parts[1]
-        if sub == 'stats':
-            stats = load_stats()
-            text = f"Пользователей сегодня: {len(stats['users_today'])}\nРасчётов сегодня: {stats['calc_today']}\nВсего пользователей: {len(stats['users'])}\nВсего расчётов: {stats['calc_count']}"
-            await query.edit_message_text(text)
-        elif sub == 'broadcast':
-            context.chat_data['phase'] = 'broadcast'
-            await query.edit_message_text("Введите текст для рассылки в группу:")
     elif action == 'partner_role':
         role_map = {
             'retail': 'Розничный магазин',
@@ -877,8 +897,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username = update.effective_user.username
         username_str = f"@{username}" if username else "Без никнейма"
         msg = f"Новая заявка партнёра от {username_str}:\n👤 Имя: {partner_data['name']}\n🏙️ Город: {partner_data['city']}\n📱 Тел: {partner_data['phone']}\n🔹 Роль: {partner_data['role']}\n💬 Сообщение: {partner_data['message']}"
-        for admin_id in ADMIN_CHAT_IDS:
-            await context.bot.send_message(admin_id, msg)
+        await context.bot.send_message(ADMIN_CHAT_ID, msg)
         await update.message.reply_text("Спасибо! Менеджер свяжется с вами в ближайшее время.\n\n😊 Добро пожаловать в команду ECO Стены!", reply_markup=build_main_menu_keyboard())
         # Reset
         context.chat_data['phase'] = None
@@ -1052,6 +1071,147 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             save_stats(stats)
         except:
             await update.message.reply_text("Неверное количество. Введите заново:")
+    elif phase == 'admin_cost_yuan':
+        text = text.replace(',', '.')
+        try:
+            cost_yuan = float(text)
+            if cost_yuan <= 0:
+                raise ValueError
+            context.chat_data['cost_yuan'] = cost_yuan
+        except ValueError:
+            await update.message.reply_text("Неверное значение. Введите Себестоимость в юанях заново:")
+            return
+        await update.message.reply_text("Введите <b>Курс Юаня</b> (к рублю):", parse_mode=ParseMode.HTML)
+        context.chat_data['phase'] = 'admin_cost_yuan_rate'
+    elif phase == 'admin_cost_yuan_rate':
+        text = text.replace(',', '.')
+        try:
+            yuan_rate = float(text)
+            if yuan_rate <= 0:
+                raise ValueError
+            context.chat_data['yuan_rate'] = yuan_rate
+        except ValueError:
+            await update.message.reply_text("Неверное значение. Введите Курс Юаня заново:")
+            return
+        await update.message.reply_text("Введите <b>Курс Доллара</b> (к рублю):", parse_mode=ParseMode.HTML)
+        context.chat_data['phase'] = 'admin_cost_dollar_rate'
+    elif phase == 'admin_cost_dollar_rate':
+        text = text.replace(',', '.')
+        try:
+            dollar_rate = float(text)
+            if dollar_rate <= 0:
+                raise ValueError
+            context.chat_data['dollar_rate'] = dollar_rate
+        except ValueError:
+            await update.message.reply_text("Неверное значение. Введите Курс Доллара заново:")
+            return
+        await update.message.reply_text("Введите <b>Ставку доставки за 1 кг в $</b>:", parse_mode=ParseMode.HTML)
+        context.chat_data['phase'] = 'admin_cost_delivery_rate'
+    elif phase == 'admin_cost_delivery_rate':
+        text = text.replace(',', '.')
+        try:
+            delivery_rate_usd = float(text)
+            if delivery_rate_usd < 0:
+                raise ValueError
+            context.chat_data['delivery_rate_usd'] = delivery_rate_usd
+        except ValueError:
+            await update.message.reply_text("Неверное значение. Введите Ставку доставки заново:")
+            return
+        await update.message.reply_text("Введите <b>Вес упаковки</b> (кг):", parse_mode=ParseMode.HTML)
+        context.chat_data['phase'] = 'admin_cost_package_weight'
+    elif phase == 'admin_cost_package_weight':
+        text = text.replace(',', '.')
+        try:
+            package_weight = float(text)
+            if package_weight < 0:
+                raise ValueError
+            context.chat_data['package_weight'] = package_weight
+        except ValueError:
+            await update.message.reply_text("Неверное значение. Введите Вес упаковки заново:")
+            return
+        await update.message.reply_text("Введите <b>Количество панелей в 1-й упаковке</b> (шт):", parse_mode=ParseMode.HTML)
+        context.chat_data['phase'] = 'admin_cost_panels_per_package'
+    elif phase == 'admin_cost_panels_per_package':
+        try:
+            panels_per_package = int(text)
+            if panels_per_package <= 0:
+                raise ValueError
+            context.chat_data['panels_per_package'] = panels_per_package
+        except ValueError:
+            await update.message.reply_text("Неверное значение. Введите Количество панелей заново:")
+            return
+        # Compute
+        params = context.chat_data['admin_cost_params']
+        area_m2 = params['area_m2']
+        weight_per_m2 = params['weight_per_m2']
+        price_rub = params['price_rub']
+        cost_yuan = context.chat_data['cost_yuan']
+        yuan_rate = context.chat_data['yuan_rate']
+        dollar_rate = context.chat_data['dollar_rate']
+        delivery_rate_usd = context.chat_data['delivery_rate_usd']
+        package_weight = context.chat_data['package_weight']
+        panels_per_package = context.chat_data['panels_per_package']
+
+        cost_yuan_per_panel = cost_yuan * area_m2
+        panel_weight_kg = weight_per_m2 * area_m2
+        delivery_per_panel_usd = delivery_rate_usd * panel_weight_kg
+        delivery_per_panel_rub = delivery_per_panel_usd * dollar_rate
+        delivery_package_rub = package_weight * delivery_rate_usd * dollar_rate
+        total_delivery_rub = panels_per_package * delivery_per_panel_rub + delivery_package_rub
+        cost_goods_rub = cost_yuan_per_panel * yuan_rate * panels_per_package
+        total_cost_rub = cost_goods_rub + total_delivery_rub
+        total_weight_kg = panel_weight_kg * panels_per_package + package_weight
+        cost_per_panel_no_del = cost_yuan_per_panel * yuan_rate
+        cost_per_panel_with_del = total_cost_rub / panels_per_package
+        profit_per = price_rub - cost_per_panel_with_del
+        kickback_per = 0.4 * price_rub
+        profit_with_kick_per = profit_per - kickback_per
+        profit_package_no_kick = profit_per * panels_per_package
+        profit_package_with_kick = profit_with_kick_per * panels_per_package
+
+        result_text = f"""
+<b>РАСЧЕТ СТОИМОСТИ И ВЕСА</b>
+
+<b>Параметры панели:</b>
+Тип: {params['title']}
+Толщина: {params['thick']} мм
+Длина: {params['length']} мм
+Квадратура: {area_m2} м²
+Вес панели на 1м²: {weight_per_m2} кг
+Цена реализации: {price_rub:,} ₽
+
+<b>Вводные данные:</b>
+Себестоимость в юанях (за 1 м²): {cost_yuan}
+Курс Юань: {yuan_rate}
+Курс $: {dollar_rate}
+Ставка доставки за 1 кг в $: {delivery_rate_usd}
+Вес упаковки: {package_weight} кг
+Количество панелей в 1-й упаковке: {panels_per_package} шт
+
+<b>Расчеты:</b>
+Вес панели: {panel_weight_kg:.2f} кг
+Цена доставки за 1 панель: {delivery_per_panel_rub:.2f} ₽
+Цена доставки всех панелей с упаковкой: {total_delivery_rub:,.2f} ₽
+Себестоимость товара: {cost_goods_rub:,.2f} ₽
+Общая цена за товар и доставку: {total_cost_rub:,.2f} ₽
+Общий вес доставки: {total_weight_kg:.2f} кг
+
+Себестоимость панели без доставки: {cost_per_panel_no_del:.2f} ₽
+Себестоимость панели с доставкой: {cost_per_panel_with_del:.2f} ₽
+
+Цена реализации: {price_rub:,} ₽
+Прибыль: {profit_per:.2f} ₽
+40% откат: {kickback_per:,.2f} ₽
+Прибыль с учетом отката: {profit_with_kick_per:.2f} ₽
+
+Прибыль полной партии без отката: {profit_package_no_kick:,.2f} ₽
+Прибыль полной партии с откатом: {profit_package_with_kick:,.2f} ₽
+        """
+        await update.message.reply_text(result_text, parse_mode=ParseMode.HTML)
+        context.chat_data['phase'] = None
+        # Clean up
+        for key in ['admin_cost_params', 'cost_yuan', 'yuan_rate', 'dollar_rate', 'delivery_rate_usd', 'package_weight', 'panels_per_package']:
+            context.chat_data.pop(key, None)
     else:
         # Default
         await update.message.reply_text("Используйте кнопки меню для расчёта или напишите /start")
