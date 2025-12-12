@@ -51,7 +51,7 @@ if not TG_BOT_TOKEN:
     raise ValueError("Установите TG_BOT_TOKEN в .env!")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-ADMIN_CHAT_ID = 203473623  # ИЗ ответа пользователя
+ADMIN_CHAT_IDS = [203473623, 490825527]  # ИЗ ответа пользователя
 
 WELCOME_PHOTO_URL = "https://ecosteni.ru/wp-content/uploads/2025/11/qncccaze.jpg"
 PRESENTATION_URL = "https://ecosteni.ru/wp-content/uploads/2025/11/ecosteny_prezentacziya.pdf"
@@ -293,7 +293,7 @@ def build_main_menu_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("📞 Контактная информация", callback_data="main|contacts")],
         [InlineKeyboardButton("🤝 Хочу стать партнёром", callback_data="main|partner")],
     ]
-    if ADMIN_CHAT_ID:
+    if ADMIN_CHAT_IDS:
         buttons.append([InlineKeyboardButton("⚙️ Администрирование", callback_data="main|admin")])
     return InlineKeyboardMarkup(buttons)
 
@@ -409,8 +409,17 @@ def build_contacts_keyboard() -> InlineKeyboardMarkup:
 
 def build_admin_keyboard() -> InlineKeyboardMarkup:
     buttons = [
-        [InlineKeyboardButton("📊 Сатистика", callback_data="admin|stats")],
+        [InlineKeyboardButton("📊 Статистика", callback_data="admin|stats")],
         [InlineKeyboardButton("📢 Рассылка", callback_data="admin|broadcast")],
+        [InlineKeyboardButton("💰 Прайсы", callback_data="admin|prices")],
+    ]
+    buttons += build_back_button("Назад")
+    return InlineKeyboardMarkup(buttons)
+
+def build_prices_keyboard() -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton("ПРОФИЛИ", callback_data="admin|download_profiles")],
+        [InlineKeyboardButton("РЕЙКИ", callback_data="admin|download_slats")],
     ]
     buttons += build_back_button("Назад")
     return InlineKeyboardMarkup(buttons)
@@ -632,7 +641,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.chat_data['phase'] = 'partner_name'
             await query.edit_message_text("🤝 Хочу стать партнёром!\n\nКак к вам обращаться? (Введите имя)")
         elif sub == 'admin':
-            if update.effective_user.id == ADMIN_CHAT_ID:
+            if update.effective_user.id in ADMIN_CHAT_IDS:
                 await query.edit_message_text("Администрирование:", reply_markup=build_admin_keyboard())
             else:
                 await query.edit_message_text("Доступ запрещён.")
@@ -782,6 +791,12 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif sub == 'broadcast':
             context.chat_data['phase'] = 'broadcast'
             await query.edit_message_text("Введите текст для рассылки в группу:")
+        elif sub == 'prices':
+            await query.edit_message_text("Прайсы:", reply_markup=build_prices_keyboard())
+        elif sub == 'download_profiles':
+            await context.bot.send_document(chat_id=query.message.chat_id, document="https://ecosteni.ru/wp-content/uploads/2025/12/profili.xlsx", caption="Прайс на профили")
+        elif sub == 'download_slats':
+            await context.bot.send_document(chat_id=query.message.chat_id, document="https://ecosteni.ru/wp-content/uploads/2025/12/rejki.xlsx", caption="Прайс на рейки")
     elif action == 'partner_role':
         role_map = {
             'retail': 'Розничный магазин',
@@ -877,7 +892,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username = update.effective_user.username
         username_str = f"@{username}" if username else "Без никнейма"
         msg = f"Новая заявка партнёра от {username_str}:\n👤 Имя: {partner_data['name']}\n🏙️ Город: {partner_data['city']}\n📱 Тел: {partner_data['phone']}\n🔹 Роль: {partner_data['role']}\n💬 Сообщение: {partner_data['message']}"
-        await context.bot.send_message(ADMIN_CHAT_ID, msg)
+        for admin_id in ADMIN_CHAT_IDS:
+            await context.bot.send_message(admin_id, msg)
         await update.message.reply_text("Спасибо! Менеджер свяжется с вами в ближайшее время.\n\n😊 Добро пожаловать в команду ECO Стены!", reply_markup=build_main_menu_keyboard())
         # Reset
         context.chat_data['phase'] = None
