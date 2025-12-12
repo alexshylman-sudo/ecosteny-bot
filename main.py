@@ -51,7 +51,7 @@ if not TG_BOT_TOKEN:
     raise ValueError("Установите TG_BOT_TOKEN в .env!")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-ADMIN_CHAT_ID = 203473623  # ИЗ ответа пользователя
+ADMIN_CHAT_IDS = [203473623, 490825527]  # ИЗ ответа пользователя
 
 WELCOME_PHOTO_URL = "https://ecosteni.ru/wp-content/uploads/2025/11/qncccaze.jpg"
 PRESENTATION_URL = "https://ecosteni.ru/wp-content/uploads/2025/11/ecosteny_prezentacziya.pdf"
@@ -293,7 +293,7 @@ def build_main_menu_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("📞 Контактная информация", callback_data="main|contacts")],
         [InlineKeyboardButton("🤝 Хочу стать партнёром", callback_data="main|partner")],
     ]
-    if ADMIN_CHAT_ID:
+    if ADMIN_CHAT_IDS:
         buttons.append([InlineKeyboardButton("⚙️ Администрирование", callback_data="main|admin")])
     return InlineKeyboardMarkup(buttons)
 
@@ -633,7 +633,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.chat_data['phase'] = 'partner_name'
             await query.edit_message_text("🤝 Хочу стать партнёром!\n\nКак к вам обращаться? (Введите имя)")
         elif sub == 'admin':
-            if update.effective_user.id == ADMIN_CHAT_ID:
+            if update.effective_user.id in ADMIN_CHAT_IDS:
                 await query.edit_message_text("Администрирование:", reply_markup=build_admin_keyboard())
             else:
                 await query.edit_message_text("Доступ запрещён.")
@@ -897,7 +897,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username = update.effective_user.username
         username_str = f"@{username}" if username else "Без никнейма"
         msg = f"Новая заявка партнёра от {username_str}:\n👤 Имя: {partner_data['name']}\n🏙️ Город: {partner_data['city']}\n📱 Тел: {partner_data['phone']}\n🔹 Роль: {partner_data['role']}\n💬 Сообщение: {partner_data['message']}"
-        await context.bot.send_message(ADMIN_CHAT_ID, msg)
+        for admin_id in ADMIN_CHAT_IDS:
+            await context.bot.send_message(admin_id, msg)
         await update.message.reply_text("Спасибо! Менеджер свяжется с вами в ближайшее время.\n\n😊 Добро пожаловать в команду ECO Стены!", reply_markup=build_main_menu_keyboard())
         # Reset
         context.chat_data['phase'] = None
@@ -1229,7 +1230,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     )
     # Опционально: сохранить фото или отправить админу
     # photo = await update.message.photo[-1].get_file()
-    # await context.bot.send_photo(ADMIN_CHAT_ID, photo.file_id, caption=f"Фото от {update.effective_user.first_name}")
+    # for admin_id in ADMIN_CHAT_IDS:
+    #     await context.bot.send_photo(admin_id, photo.file_id, caption=f"Фото от {update.effective_user.first_name}")
 
 # ============================
 #   REGISTRATION
