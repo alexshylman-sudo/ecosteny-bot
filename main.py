@@ -51,7 +51,7 @@ if not TG_BOT_TOKEN:
     raise ValueError("Установите TG_BOT_TOKEN в .env!")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-ADMIN_CHAT_IDS = [203473623, 490825527]
+ADMIN_CHAT_ID = 203473623  # ИЗ ответа пользователя
 
 WELCOME_PHOTO_URL = "https://ecosteni.ru/wp-content/uploads/2025/11/qncccaze.jpg"
 PRESENTATION_URL = "https://ecosteni.ru/wp-content/uploads/2025/11/ecosteny_prezentacziya.pdf"
