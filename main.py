@@ -411,8 +411,16 @@ def build_admin_keyboard() -> InlineKeyboardMarkup:
     buttons = [
         [InlineKeyboardButton("📊 Сатистика", callback_data="admin|stats")],
         [InlineKeyboardButton("📢 Рассылка", callback_data="admin|broadcast")],
-        [InlineKeyboardButton("Прайсы", callback_data="admin|prices")],
         [InlineKeyboardButton("💰 Расчет стоимости и веса", callback_data="admin|cost_calc")],
+        [InlineKeyboardButton("📋 Прайсы", callback_data="admin|prices")],
+    ]
+    buttons += build_back_button("Назад")
+    return InlineKeyboardMarkup(buttons)
+
+def build_prices_keyboard() -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton("ПРОФИЛИ", url="https://ecosteni.ru/wp-content/uploads/2025/12/profili.xlsx")],
+        [InlineKeyboardButton("РЕЙКИ", url="https://ecosteni.ru/wp-content/uploads/2025/12/rejki.xlsx")],
     ]
     buttons += build_back_button("Назад")
     return InlineKeyboardMarkup(buttons)
@@ -425,15 +433,6 @@ def build_partner_role_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("❓ Другое", callback_data="partner_role|other")],
     ]
     return InlineKeyboardMarkup(buttons)
-
-def build_prices_keyboard() -> InlineKeyboardMarkup:
-    buttons = [
-        [InlineKeyboardButton("ПРОФИЛИ", callback_data="prices|profiles")],
-        [InlineKeyboardButton("РЕЙКИ", callback_data="prices|slats")],
-        [InlineKeyboardButton("Назад в админ", callback_data="admin|back")],
-    ]
-    return InlineKeyboardMarkup(buttons)
-
 
 async def send_greeting(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -618,7 +617,6 @@ def calculate_item(item, wall_width_m, wall_height_m, deduct_area_m2, unit, calc
 
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()  # Добавлено для лучшей UX (было отсутствует)
     data = query.data
     parts = data.split('|')
     action = parts[0]
@@ -644,51 +642,24 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.chat_data['phase'] = 'partner_name'
             await query.edit_message_text("🤝 Хочу стать партнёром!\n\nКак к вам обращаться? (Введите имя)")
         elif sub == 'admin':
-            if update.effective_user.id not in ADMIN_CHAT_IDS:  # Изменено на список ADMIN_CHAT_IDS
+            if update.effective_user.id == ADMIN_CHAT_ID:
+                await query.edit_message_text("Администрирование:", reply_markup=build_admin_keyboard())
+            else:
                 await query.edit_message_text("Доступ запрещён.")
-                return
-            await query.edit_message_text("Администрирование:", reply_markup=build_admin_keyboard())
     elif action == 'admin':
         sub = parts[1]
-        if update.effective_user.id not in ADMIN_CHAT_IDS:  # Добавлена проверка для всех admin-действий
-            await query.edit_message_text("Доступ запрещён.")
-            return
         if sub == 'stats':
             stats = load_stats()
             text = f"Пользователей сегодня: {len(stats['users_today'])}\nРасчётов сегодня: {stats['calc_today']}\nВсего пользователей: {len(stats['users'])}\nВсего расчётов: {stats['calc_count']}"
             await query.edit_message_text(text)
-        elif sub == 'prices':
-            keyboard = build_prices_keyboard()
-            await query.edit_message_text("Выберите прайс для скачивания:", reply_markup=keyboard)
         elif sub == 'broadcast':
             context.chat_data['phase'] = 'broadcast'
             await query.edit_message_text("Введите текст для рассылки в группу:")
         elif sub == 'cost_calc':
             context.chat_data['is_admin_cost'] = True
             await query.edit_message_text("Выберите тип WPC для расчета:", reply_markup=build_wall_product_keyboard())
-        elif sub == 'back':
-            keyboard = build_admin_keyboard()
-            await query.edit_message_text("Администрирование:", reply_markup=keyboard)
-            return
-    elif action == 'prices':
-        if update.effective_user.id not in ADMIN_CHAT_IDS:  # Проверка для prices
-            await query.answer("Доступ запрещён.")
-            return
-        sub = parts[1]
-        if sub == 'profiles':
-            await query.message.reply_document(
-                document="https://ecosteni.ru/wp-content/uploads/2025/12/profili.xlsx",
-                caption="Прайс на профили"
-            )
-            await query.answer("Файл отправлен!")
-            return
-        elif sub == 'slats':
-            await query.message.reply_document(
-                document="https://ecosteni.ru/wp-content/uploads/2025/12/rejki.xlsx",
-                caption="Прайс на рейки"
-            )
-            await query.answer("Файл отправлен!")
-            return
+        elif sub == 'prices':
+            await query.edit_message_text("Прайсы:", reply_markup=build_prices_keyboard())
     elif action == 'calc_cat':
         cat = parts[1]
         context.chat_data['current_cat'] = cat
@@ -903,7 +874,6 @@ async def proceed_to_wall_input(query, context):
     else:
         context.chat_data['phase'] = 'units'
         await query.edit_message_text("В каких единицах удобнее работать?", reply_markup=build_units_keyboard())
-
 
 # ============================
 #   MESSAGE HANDLER
